@@ -102,6 +102,8 @@ async function boot(): Promise<void> {
       });
       overlayRenderer = new HandOverlay(trackerCanvas, tracker.video);
       enableButton.classList.add('hidden');
+      document.getElementById('tracker-delegate')!.textContent = tracker.delegate;
+      console.info(`[bio-vision] hand tracking using ${tracker.delegate} delegate`);
     } catch (error) {
       console.error('[bio-vision] camera failed', error);
       enableButton.disabled = false;

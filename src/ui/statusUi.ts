@@ -40,6 +40,23 @@ export class StatusUi {
 
   private current: GestureMode | null = null;
 
+  constructor() {
+    // Specimen log and gesture guide start collapsed so the organ itself is
+    // never obstructed; tapping the header reveals each on demand.
+    this.wireCollapsible('notes', 'notes-head');
+    this.wireCollapsible('legend', 'legend-head');
+  }
+
+  private wireCollapsible(panelId: string, headId: string): void {
+    const panel = document.getElementById(panelId);
+    const head = document.getElementById(headId);
+    if (!panel || !head) return;
+    head.addEventListener('click', () => {
+      const collapsed = panel.classList.toggle('collapsed');
+      head.setAttribute('aria-expanded', String(!collapsed));
+    });
+  }
+
   setMode(mode: GestureMode): void {
     if (mode === this.current) return;
     this.current = mode;

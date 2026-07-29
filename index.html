@@ -34,26 +34,55 @@
         <span class="scanline"></span>
       </div>
 
-      <header id="titlebar">
-        <div class="brand">
-          <span class="glyph">✚</span>
-          <div>
-            <h1>BIO<span>·</span>VISION</h1>
-            <p>ZERO-FOOTPRINT VIRTUAL DISSECTION</p>
+      <!-- Top row: title, organ selector and telemetry share one flex row so
+           they can never overlap regardless of viewport width. -->
+      <div id="top-bar">
+        <header id="titlebar">
+          <div class="brand">
+            <span class="glyph">✚</span>
+            <div>
+              <h1>BIO<span>·</span>VISION</h1>
+              <p>ZERO-FOOTPRINT VIRTUAL DISSECTION</p>
+            </div>
           </div>
-        </div>
-        <div class="build">EMBC&nbsp;2026</div>
-      </header>
+          <div class="build">EMBC&nbsp;2026</div>
+        </header>
 
-      <!-- Top-centre: anatomical library selector -->
-      <nav id="organ-switcher" aria-label="Select organ"></nav>
+        <nav id="organ-switcher" aria-label="Select organ"></nav>
 
-      <!-- Left: mission-log style anatomical notes -->
-      <section id="notes">
-        <div class="notes-head">
+        <section id="hud">
+          <div class="hud-title">SYSTEM TELEMETRY</div>
+          <div class="hud-row">
+            <span>RENDER</span>
+            <div class="hud-meter"><i id="bar-fps"></i></div>
+            <b id="hud-fps">--</b><em>Hz</em>
+          </div>
+          <div class="hud-row">
+            <span>TRACKING</span>
+            <div class="hud-meter"><i id="bar-track"></i></div>
+            <b id="hud-track">--</b><em>fps</em>
+          </div>
+          <div class="hud-row">
+            <span>LATENCY</span>
+            <div class="hud-meter"><i id="bar-latency"></i></div>
+            <b id="hud-latency">--</b><em>ms</em>
+          </div>
+          <div class="hud-row">
+            <span>ZOOM</span>
+            <div class="hud-meter"><i id="bar-zoom"></i></div>
+            <b id="hud-zoom">0</b><em>%</em>
+          </div>
+        </section>
+      </div>
+
+      <!-- Left: mission-log style anatomical notes. Collapsed by default so
+           the specimen itself stays fully visible; tap the header to reveal. -->
+      <section id="notes" class="collapsed">
+        <button id="notes-head" class="collapsible-head notes-head" type="button" aria-expanded="false">
           <span class="dot"></span>
           <h2 id="notes-title">SPECIMEN LOG</h2>
-        </div>
+          <span class="chevron">›</span>
+        </button>
         <div class="notes-body">
           <p id="notes-lead">Initialising rendering core…</p>
           <ul id="notes-facts"></ul>
@@ -64,36 +93,14 @@
         </div>
       </section>
 
-      <!-- Right: telemetry HUD -->
-      <section id="hud">
-        <div class="hud-title">SYSTEM TELEMETRY</div>
-        <div class="hud-row">
-          <span>RENDER</span>
-          <div class="hud-meter"><i id="bar-fps"></i></div>
-          <b id="hud-fps">--</b><em>Hz</em>
-        </div>
-        <div class="hud-row">
-          <span>TRACKING</span>
-          <div class="hud-meter"><i id="bar-track"></i></div>
-          <b id="hud-track">--</b><em>fps</em>
-        </div>
-        <div class="hud-row">
-          <span>LATENCY</span>
-          <div class="hud-meter"><i id="bar-latency"></i></div>
-          <b id="hud-latency">--</b><em>ms</em>
-        </div>
-        <div class="hud-row">
-          <span>ZOOM</span>
-          <div class="hud-meter"><i id="bar-zoom"></i></div>
-          <b id="hud-zoom">0</b><em>%</em>
-        </div>
-      </section>
-
       <!-- Bottom-right: live camera feed with skeletal hand overlay (Fig. 1) -->
       <section id="tracker-panel">
         <div class="tracker-label">
           MONOCULAR HAND TRACKING
-          <span id="camera-fps"></span>
+          <span>
+            <span id="tracker-delegate"></span>
+            <span id="camera-fps"></span>
+          </span>
         </div>
         <canvas id="tracker-canvas" width="320" height="240"></canvas>
         <button id="enable-camera" type="button">
@@ -134,19 +141,28 @@
         <button id="settings-reset" type="button">RESET TO DEFAULTS</button>
       </section>
 
-      <!-- Bottom-centre: gesture legend -->
-      <section id="legend">
-        <div class="legend-item" data-mode="GRAB">
+      <!-- Bottom-left: gesture legend. Collapsed by default (same pattern as
+           the specimen log) so it never competes with the tracker panel for
+           space on narrower screens. -->
+      <section id="legend" class="collapsed">
+        <button id="legend-head" class="collapsible-head" type="button" aria-expanded="false">
           <span class="legend-key">✋</span>
-          <div><b>MOVE</b><small>One hand · specimen follows</small></div>
-        </div>
-        <div class="legend-item" data-mode="GRAB">
-          <span class="legend-key">🤏</span>
-          <div><b>ZOOM IN / OUT</b><small>Spread to dive inside · pinch to pull out</small></div>
-        </div>
-        <div class="legend-item" data-mode="ROTATE">
-          <span class="legend-key">✌</span>
-          <div><b>ROTATE</b><small>Two hands · spins in place</small></div>
+          <h2>GESTURE GUIDE</h2>
+          <span class="chevron">›</span>
+        </button>
+        <div class="legend-items">
+          <div class="legend-item" data-mode="GRAB">
+            <span class="legend-key">✋</span>
+            <div><b>MOVE</b><small>One hand · specimen follows</small></div>
+          </div>
+          <div class="legend-item" data-mode="GRAB">
+            <span class="legend-key">🤏</span>
+            <div><b>ZOOM IN / OUT</b><small>Spread to dive inside · pinch to pull out</small></div>
+          </div>
+          <div class="legend-item" data-mode="ROTATE">
+            <span class="legend-key">✌</span>
+            <div><b>ROTATE</b><small>Two hands · spins in place</small></div>
+          </div>
         </div>
       </section>
 

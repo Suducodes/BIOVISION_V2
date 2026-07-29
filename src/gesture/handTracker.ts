@@ -6,12 +6,15 @@ export interface TrackerHandle {
   video: HTMLVideoElement;
   /** Measured delivery rate of the camera, for diagnostics/telemetry. */
   cameraFps(): number;
+  /** Which MediaPipe delegate ended up active — GPU unless it failed to init. */
+  delegate: 'GPU' | 'CPU';
   stop(): void;
 }
 
 interface WorkerResult {
   type: 'ready' | 'init-error' | 'result';
   message?: string;
+  delegate?: 'GPU' | 'CPU';
   hands?: HandLandmarks[];
   timestamp?: number;
   inferenceMs?: number;
@@ -38,10 +41,12 @@ export async function startHandTracking(
   // not in dev). This IIFE is produced by `npm run build:worker`, so the same
   // off-main-thread tracking works identically in dev and production.
   const worker = new Worker(asset('handWorker.js'));
+  let activeDelegate: 'GPU' | 'CPU' = 'CPU';
 
   await new Promise<void>((resolve, reject) => {
     const onMessage = (e: MessageEvent<WorkerResult>) => {
       if (e.data.type === 'ready') {
+        activeDelegate = e.data.delegate ?? 'CPU';
         worker.removeEventListener('message', onMessage);
         resolve();
       } else if (e.data.type === 'init-error') {
@@ -154,6 +159,7 @@ export async function startHandTracking(
   return {
     video,
     cameraFps: () => Math.round(fpsEstimate),
+    delegate: activeDelegate,
     stop() {
       running = false;
       stream.getTracks().forEach((track) => track.stop());

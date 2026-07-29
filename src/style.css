@@ -119,13 +119,15 @@ body {
 
 /* --- Shared panel chrome ------------------------------------------------ */
 
+/* Shared panel chrome — deliberately holds no positioning, so it applies
+   equally to panels still individually absolute-positioned (#notes,
+   #tracker-panel, #legend) and to panels now living inside the #top-bar flex
+   row (#titlebar, #hud), which must NOT be absolutely positioned themselves. */
 #titlebar,
 #notes,
 #hud,
 #tracker-panel,
 #legend {
-  position: absolute;
-  z-index: 6;
   background: var(--panel);
   border: 1px solid var(--edge);
   border-radius: 12px;
@@ -135,15 +137,31 @@ body {
     0 10px 34px rgba(0, 0, 0, 0.42);
 }
 
-/* --- Titlebar ----------------------------------------------------------- */
+/* --- Top bar -------------------------------------------------------------
+   Title, organ selector and telemetry share one flex row with
+   justify-content:space-between. Because flexbox — not three independent
+   absolutely-positioned elements guessing at each other's width — lays these
+   out, they cannot overlap at any viewport width; the organ selector simply
+   occupies whatever room is left between the other two. */
 
-#titlebar {
+#top-bar {
+  position: absolute;
+  z-index: 6;
   top: 30px;
   left: 30px;
+  right: 30px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+#titlebar {
   display: flex;
   align-items: center;
   gap: 26px;
   padding: 14px 22px;
+  flex-shrink: 0;
 }
 
 .brand {
@@ -190,17 +208,55 @@ body {
 /* --- Notes / specimen log ---------------------------------------------- */
 
 #notes {
+  position: absolute;
+  z-index: 6;
   top: 130px;
   left: 30px;
   width: 320px;
   padding: 18px 20px 16px;
   border-left: 2px solid var(--cyan);
+  transition: width 0.22s ease, height 0.22s ease;
+  overflow: hidden;
 }
 
-.notes-head {
+.collapsible-head {
   display: flex;
   align-items: center;
   gap: 9px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.collapsible-head .chevron {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-dim);
+  transition: transform 0.22s ease, color 0.18s ease;
+}
+
+.collapsible-head:hover .chevron {
+  color: var(--cyan);
+}
+
+#notes:not(.collapsed) .chevron,
+#legend:not(.collapsed) .chevron {
+  transform: rotate(90deg);
+}
+
+/* Collapsed: only the clickable header row shows, so the panel shrinks to a
+   compact pill and never obstructs the specimen behind it. */
+#notes.collapsed .notes-body,
+#notes.collapsed .notes-mode {
+  display: none;
+}
+
+#notes:not(.collapsed) .notes-head {
   margin-bottom: 14px;
 }
 
@@ -290,10 +346,9 @@ body {
 /* --- Telemetry HUD ------------------------------------------------------ */
 
 #hud {
-  top: 30px;
-  right: 30px;
   width: 268px;
   padding: 14px 16px;
+  flex-shrink: 0;
 }
 
 .hud-title {
@@ -358,6 +413,8 @@ body {
 /* --- Tracker panel ------------------------------------------------------ */
 
 #tracker-panel {
+  position: absolute;
+  z-index: 6;
   bottom: 30px;
   right: 30px;
   width: 300px;
@@ -383,6 +440,12 @@ body {
 
 #camera-fps.low {
   color: var(--amber);
+}
+
+#tracker-delegate {
+  letter-spacing: 0.08em;
+  color: var(--cyan-dim);
+  margin-right: 6px;
 }
 
 #tracker-canvas {
@@ -439,11 +502,8 @@ body {
 /* --- Organ switcher ----------------------------------------------------- */
 
 #organ-switcher {
-  position: absolute;
-  z-index: 7;
-  top: 34px;
-  left: 50%;
-  transform: translateX(-50%);
+  align-self: center;
+  flex-shrink: 0;
   display: flex;
   gap: 4px;
   padding: 4px;
@@ -629,15 +689,46 @@ body {
 }
 #settings-reset:hover { background: rgba(70, 200, 255, 0.1); color: var(--text); }
 
-/* --- Gesture legend ----------------------------------------------------- */
+/* --- Gesture legend -------------------------------------------------------
+   Anchored to the bottom-LEFT (beside the settings gear), not centred on the
+   viewport — that's what let it drift into the tracker panel's space on
+   narrower screens. Collapsed by default; its max-width is capped relative to
+   the viewport so that even expanded, it can never reach the tracker panel. */
 
 #legend {
+  position: absolute;
+  z-index: 6;
   bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 84px;
+  width: max-content;
+  padding: 10px 12px;
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+#legend:not(.collapsed) {
+  max-width: min(560px, calc(100vw - 84px - 330px));
+}
+
+#legend.collapsed .legend-items {
+  display: none;
+}
+
+#legend-head h2 {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--cyan);
+  white-space: nowrap;
+}
+
+.legend-items {
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  padding: 8px;
 }
 
 .legend-item {
@@ -731,7 +822,8 @@ body {
 /* --- Responsive: keep the demo legible on smaller screens --------------- */
 
 @media (max-width: 900px) {
-  #notes { display: none; }
-  #legend { flex-direction: column; }
+  /* #notes and #legend are collapsible pills by default now, so they no
+     longer need to be hidden outright on narrow screens — only the HUD's
+     fixed width needs to shrink to keep the top bar from feeling cramped. */
   #hud { width: 210px; }
 }
