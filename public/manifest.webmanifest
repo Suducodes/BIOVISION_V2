@@ -1,0 +1,13 @@
+{
+  "name": "Bio-Vision — Zero-Footprint Virtual Dissection",
+  "short_name": "Bio-Vision",
+  "start_url": ".",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#030710",
+  "theme_color": "#030710",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

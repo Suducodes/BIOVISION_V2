@@ -2,8 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>Bio-Vision // Edu-Platform</title>
+
+    <!-- iOS "Add to Home Screen" launches with no Safari chrome at all when
+         these are present — the only reliable way to get a true full-screen
+         experience on iPad, since the Fullscreen API is not supported in
+         iOS Safari. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Bio-Vision" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#030710" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
   </head>
   <body>
     <div id="app">
