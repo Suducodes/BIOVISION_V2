@@ -89,6 +89,24 @@ export async function startHandTracking(
   let lastFrameStamp = performance.now();
   let fpsEstimate = 0;
 
+  // The camera's "ideal" resolution hint is frequently ignored (an iPad front
+  // camera commonly delivers well above 480×360 regardless). Grabbing an
+  // ImageBitmap straight off the <video> element bitmaps it at that full native
+  // size, which is the dominant cost on mobile Safari — worse than the
+  // inference itself. Instead, draw each frame into a small fixed-size canvas
+  // first and transfer *that*: a fraction of the pixels to encode and hand to
+  // the worker, at essentially no cost to landmark accuracy since MediaPipe
+  // resizes to its own fixed input regardless.
+  const GRAB_WIDTH = 224;
+  const GRAB_HEIGHT = 168; // 4:3, matching the requested camera aspect
+  const supportsOffscreen = typeof OffscreenCanvas !== 'undefined';
+  const grabCanvas: OffscreenCanvas | HTMLCanvasElement = supportsOffscreen
+    ? new OffscreenCanvas(GRAB_WIDTH, GRAB_HEIGHT)
+    : Object.assign(document.createElement('canvas'), { width: GRAB_WIDTH, height: GRAB_HEIGHT });
+  const grabCtx = grabCanvas.getContext('2d', {
+    willReadFrequently: false,
+  }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
   worker.addEventListener('message', (e: MessageEvent<WorkerResult>) => {
     if (e.data.type !== 'result') return;
     busy = false;
@@ -114,7 +132,10 @@ export async function startHandTracking(
       if (!busy) {
         busy = true;
         try {
-          const bitmap = await createImageBitmap(video);
+          grabCtx.drawImage(video, 0, 0, GRAB_WIDTH, GRAB_HEIGHT);
+          const bitmap = supportsOffscreen
+            ? (grabCanvas as OffscreenCanvas).transferToImageBitmap()
+            : await createImageBitmap(grabCanvas as HTMLCanvasElement);
           worker.postMessage({ type: 'frame', bitmap, timestamp: now }, [bitmap]);
         } catch {
           busy = false;
