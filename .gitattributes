@@ -1,0 +1,7 @@
+# Keep binary assets byte-exact (never apply line-ending conversion).
+*.glb binary
+*.wasm binary
+*.task binary
+*.png binary
+*.jpg binary
+*.jpeg binary
