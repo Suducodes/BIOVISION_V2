@@ -1,6 +1,10 @@
 captures/
+.claude/
 node_modules
 dist
 .DS_Store
 *.local
 public/handWorker.js
+# SurgiLearn runtime config — holds the Claude API key. Copy config.example.js
+# to public/config.js locally; never commit the filled-in version.
+public/config.js

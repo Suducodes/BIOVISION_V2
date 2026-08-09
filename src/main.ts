@@ -13,10 +13,20 @@ import { GestureMapper } from './gesture/gestureMapper';
 import { HandOverlay } from './gesture/handOverlay';
 import type { GestureMode, HandLandmarks } from './gesture/types';
 import { ORGANS, type OrganDef } from './organs';
-import { buildOrganSwitcher } from './ui/organSwitcher';
+import { buildOrganSwitcher, setActiveOrgan } from './ui/organSwitcher';
+import { SurgiLearn, CORONARY_SPECIMENS } from './surgilearn';
+import { loadCaseModel } from './surgilearn/specimenLoader';
+import { findCase } from './surgilearn/cases';
+
+// The anatomical library plus the SurgiLearn coronary case library. Appending
+// rather than replacing keeps the original two specimens exactly where the
+// EMBC demo left them, and makes the switcher itself the model selector.
+const SPECIMENS: OrganDef[] = [...ORGANS, ...CORONARY_SPECIMENS];
 
 async function boot(): Promise<void> {
+  const app = document.getElementById('app')!;
   const viewport = document.getElementById('viewport')!;
+  const topBar = document.getElementById('top-bar')!;
   const overlay = document.getElementById('loading-overlay')!;
   const loadingText = document.getElementById('loading-text')!;
   const trackerCanvas = document.getElementById('tracker-canvas') as HTMLCanvasElement;
@@ -35,6 +45,7 @@ async function boot(): Promise<void> {
   let zoomFar = stage.framingDistance;
   let zoomNear = 0.1;
   let switching = false;
+  let surgilearn: SurgiLearn | undefined;
 
   const loadOrgan = async (organ: OrganDef): Promise<void> => {
     if (switching) return;
@@ -42,9 +53,16 @@ async function boot(): Promise<void> {
     overlay.classList.remove('hidden');
     loadingText.textContent = `Loading ${organ.label.toLowerCase()}…`;
 
-    const model = await loadAnatomicalModel(organ.url, (fraction) => {
+    const onProgress = (fraction: number) => {
       loadingText.textContent = `Loading ${organ.label.toLowerCase()}… ${Math.round(fraction * 100)}%`;
-    });
+    };
+
+    // Coronary cases go through the SurgiLearn loader, which falls back to the
+    // procedural arterial tree when the GLB has not been supplied yet.
+    const caseDef = findCase(organ.caseId);
+    const model = caseDef
+      ? await loadCaseModel(caseDef, organ.url, onProgress)
+      : await loadAnatomicalModel(organ.url, onProgress);
 
     // Swap the specimen and reset the view so each organ opens framed and level.
     stage.pivot.clear();
@@ -54,8 +72,12 @@ async function boot(): Promise<void> {
     zoomFar = stage.framingDistance;
     zoomNear = model.radius * 0.06;
 
+    const origin = 'origin' in model && model.origin === 'procedural'
+      ? 'procedural coronary tree (no GLB supplied)'
+      : organ.source;
+
     status.setSpecimen(organ.logTitle, [
-      ['Source', organ.source],
+      ['Source', origin],
       ['Load', `${model.loadMs.toFixed(0)} ms`],
       ['Meshes', `${model.materials.length} part(s)`],
       ['Zoom', 'camera dives inside the specimen'],
@@ -67,11 +89,30 @@ async function boot(): Promise<void> {
 
     overlay.classList.add('hidden');
     switching = false;
+
+    surgilearn?.onSpecimenLoaded(organ);
   };
 
   status.setMode('IDLE');
-  await loadOrgan(ORGANS[0]!);
-  buildOrganSwitcher(ORGANS, ORGANS[0]!.id, (organ) => void loadOrgan(organ));
+  await loadOrgan(SPECIMENS[0]!);
+  buildOrganSwitcher(SPECIMENS, SPECIMENS[0]!.id, (organ) => void loadOrgan(organ));
+
+  // --- SurgiLearn simulation layer --------------------------------------
+  // Purely additive: it observes the stage and owns its own panels, and every
+  // piece of challenge state lives inside it, so EXPLORE mode is the original
+  // platform untouched.
+  surgilearn = new SurgiLearn({
+    stage,
+    root: app,
+    topBar,
+    async requestSpecimen(id: string) {
+      const specimen = SPECIMENS.find((s) => s.id === id);
+      if (!specimen) return;
+      setActiveOrgan(id);
+      await loadOrgan(specimen);
+    },
+  });
+  surgilearn.onSpecimenLoaded(SPECIMENS[0]!);
 
   // --- Gesture pipeline -------------------------------------------------
   // The mapper is driven at tracking cadence (~30 fps); the controller it
@@ -95,6 +136,9 @@ async function boot(): Promise<void> {
       tracker = await startHandTracking((frame) => {
         const signals = classifier.classify(frame.hands);
         mapper.apply(signals);
+        // The fingertip doubles as a touchless cursor for the challenge layer;
+        // it never feeds back into the manipulation pipeline.
+        surgilearn?.setGestureTip(signals.indexTip);
         latestHands = frame.hands;
         latestMode = signals.mode;
         status.setMode(signals.mode);
@@ -120,6 +164,7 @@ async function boot(): Promise<void> {
       controller,
       loadOrgan,
       enableGestures,
+      surgilearn,
       renderOnce: () => stage.renderer.render(stage.scene, stage.camera),
     },
   });
@@ -127,7 +172,8 @@ async function boot(): Promise<void> {
   const clock = new THREE.Clock();
   const renderLoop = () => {
     requestAnimationFrame(renderLoop);
-    controller.update(clock.getDelta());
+    const delta = clock.getDelta();
+    controller.update(delta);
 
     // Map smoothed zoom onto the camera dolly. Eased so the last stretch — the
     // dive through the surface into the interior — slows down and reads clearly.
@@ -139,6 +185,9 @@ async function boot(): Promise<void> {
     stage.headlamp.intensity = 14 * eased;
 
     hud.setZoom(z);
+    // Runs after the controller so the challenge layer reads the same
+    // orientation the frame is about to be drawn with.
+    surgilearn?.update(delta * 1000);
     stage.renderer.render(stage.scene, stage.camera);
     overlayRenderer?.draw(latestHands, latestMode);
     hud.markRender();

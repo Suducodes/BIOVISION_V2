@@ -79,7 +79,14 @@ export class GestureClassifier {
     const desired: GestureMode = handCount >= 2 ? 'ROTATE' : 'GRAB';
     this.commit(desired);
 
-    return { mode: this.mode, primary, pinchDistance, handCount };
+    const tip = primaryHand[LM.INDEX_TIP]!;
+    return {
+      mode: this.mode,
+      primary,
+      pinchDistance,
+      indexTip: { x: tip.x, y: tip.y },
+      handCount,
+    };
   }
 
   /** Smoothing is stateful; reset it when tracking is (re)started. */
