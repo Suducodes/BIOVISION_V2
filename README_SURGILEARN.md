@@ -35,14 +35,22 @@ original render, gesture, or interaction pipeline was rewritten.
 The existing specimen switcher gains three coronary cases alongside Heart and
 Lungs, so the model selector is the control the user already knows:
 
-| Case | Clinical picture | Correct grade |
-| --- | --- | --- |
-| **Case 1** | 58F, atypical chest pain — normal anatomy baseline | `NORMAL` |
-| **Case 2** | 65M, exertional chest pain — mid-LAD plaque | `MILD` |
-| **Case 3** | 47M athlete, exertional syncope — anomalous RCA origin from the left sinus with a severe proximal lesion | `SEVERE` |
+| Case | Specimen | Clinical picture | Correct grade |
+| --- | --- | --- | --- |
+| **Case 1** | `case_182` CTA segmentation | 58F, atypical chest pain — normal anatomy baseline | `NORMAL` |
+| **Case 2** | `case_193` CTA segmentation | 65M, exertional chest pain — mid-LAD plaque | `MILD` |
+| **Case 3** | procedural | 47M athlete, exertional syncope — anomalous RCA origin from the left sinus with a severe proximal lesion | `SEVERE` |
 
 Each case loads `public/models/coronary/caseN.glb`. **If the GLB is not
 present, the case still plays** — see [How to add GLB files](#how-to-add-glb-files).
+
+> ⚠️ **The clinical content of Cases 1 and 2 has not been matched to the scans.**
+> The vignettes, lesion positions and answer keys were authored against the
+> procedural reference anatomy before the patient segmentations arrived. Someone
+> who can read the studies needs to confirm what `case_182` and `case_193`
+> actually show and correct `brief`, `answer`, `lesion` and `teaching` in
+> `src/surgilearn/cases.ts`. Case 3 is fully procedural and internally
+> consistent.
 
 ### 2. EXPLORE ↔ CHALLENGE mode toggle
 
@@ -155,9 +163,11 @@ browser. It is not a stand-in cube:
 Every objective is scoreable with or without a GLB, so the platform is
 demonstrable on a fresh clone.
 
-### Binding regions in a supplied GLB
+### Binding regions to a specimen
 
-Mesh names are matched case-insensitively:
+Regions resolve in three tiers, best first.
+
+**1 · Mesh names in the GLB.** Matched case-insensitively:
 
 | Region | Matches |
 | --- | --- |
@@ -166,10 +176,37 @@ Mesh names are matched case-insensitively:
 | RCA | `RCA`, `right coronary` |
 | Stenosis | any name containing `stenos`, `plaque`, `lesion`, `narrow` |
 
-Anything the asset does not name is filled in with **invisible proxy tubes**
-generated from the same reference centrelines and scaled to the model's own
-bounding box, so an unlabelled asset still plays. The console reports exactly
-which regions had to be synthesised.
+**2 · Placed anchors.** A CTA segmentation names nothing — `case_182` and
+`case_193` each arrive as one unnamed mesh (`geometry_0`) with no materials,
+fragmented into 30 and 62 disconnected islands in raw scanner millimetres. No
+heuristic recovers which island is the LAD: fitting the reference centrelines to
+the bounding box put them on the real surface **0% / 0% / 11%** of the time
+(measured, `case_182`). So a real specimen is labelled once, by hand:
+
+1. Load the case and enter CHALLENGE mode. The mission panel says which vessels
+   are unlabelled and offers **📍 LABEL VESSELS** (or open the app with
+   `?anchors=1`).
+2. Click a region in the picker, then click that vessel on the model.
+3. Repeat for each region. Anchors save to `localStorage` immediately and the
+   case is playable at once.
+4. Press **COPY FOR cases.ts** and paste the snippet into the case definition to
+   make it permanent for everyone:
+
+   ```ts
+   regionAnchors: {
+     LAD: { at: [-0.540, -0.214, 0.002], radius: 0.16 },
+     RCA: { at: [0.408, -0.494, 0.346], radius: 0.16 },
+   },
+   ```
+
+   Coordinates are in the **normalised pivot frame** (longest model axis = 2
+   units), not scanner millimetres, so they survive any rescaling of the asset.
+
+**3 · Reference proxies.** Anything still unaccounted for falls back to
+invisible tubes built from the reference centrelines. On the procedural specimen
+that is exact — it *is* those centrelines. On a real scan it is a guess, so the
+mission panel says so in amber rather than marking a student wrong for pointing
+at the right vessel.
 
 ---
 
@@ -321,6 +358,36 @@ Checked in-browser against the running dev server:
 - Leaving CHALLENGE mode restores `emissive` to `0x000000` and
   `emissiveIntensity` to `1` — the values the loader produced.
 - Layout free of overlap and horizontal overflow at 375, 768, 1024 and 1280 px.
+
+---
+
+## Performance
+
+Hover detection is the only thing in the challenge layer that costs real time,
+and the first implementation raycast the display geometry on every rendered
+frame. `THREE.Raycaster` has no acceleration structure: once a ray clears a
+mesh's bounding sphere it tests every triangle. Measured in-browser:
+
+| Path | Before | After |
+| --- | ---: | ---: |
+| EXPLORE mode | 0.001 ms | 0.001 ms |
+| CHALLENGE, cursor on a vessel | **1.31 ms** | **0.07 – 0.22 ms** |
+| Scene render, for scale | 0.48 – 1.32 ms | unchanged |
+
+At 1.31 ms the challenge layer cost more per frame than the entire 3D render,
+and a 234k-triangle patient scan would have been far worse. Three changes:
+
+1. **Coarse colliders.** Identification raycasts against ~320-triangle
+   stand-ins built from the same centrelines, never drawn
+   (`material.visible = false` keeps them raycastable). Two orders of magnitude
+   fewer triangle tests, identical hit at the tolerance a fingertip can hold.
+2. **Throttled casting.** The raycast runs at ~30 Hz instead of every frame. The
+   dwell it feeds is two seconds long, and dwell time still accumulates on the
+   true frame delta, so the ring fills smoothly.
+3. **No per-frame layout reads.** `getBoundingClientRect()` ran twice per frame
+   inside the render loop, interleaved with the panel's own DOM writes — the
+   textbook layout-thrash pattern. The container is full-window, so the rect is
+   cached and refreshed on resize.
 
 ---
 

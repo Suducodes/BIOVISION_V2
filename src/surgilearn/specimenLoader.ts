@@ -24,6 +24,7 @@ export async function loadCaseModel(
   if (await exists(url)) {
     try {
       const model = await loadAnatomicalModel(url, onProgress);
+      applyArterialFinish(model.materials);
       return { ...model, origin: 'glb' };
     } catch (error) {
       console.warn(
@@ -39,6 +40,26 @@ export async function loadCaseModel(
   }
 
   return buildProceduralSpecimen(def);
+}
+
+/**
+ * Coronary segmentations are exported straight from the reconstruction pipeline
+ * with no materials at all, so glTF hands them the default white plastic — which
+ * reads as a 3D-print of a vessel tree rather than a vessel tree. Give untextured
+ * meshes the same arterial finish the procedural tree uses, so the two sources
+ * look like the same platform. Anything that arrived with its own texture is left
+ * exactly as authored.
+ */
+function applyArterialFinish(materials: THREE.Material[]): void {
+  for (const material of materials) {
+    if (!(material instanceof THREE.MeshStandardMaterial)) continue;
+    if (material.map) continue;
+    material.color.setHex(0xb02a30);
+    material.roughness = 0.45;
+    material.metalness = 0;
+    material.envMapIntensity = 0.5;
+    material.needsUpdate = true;
+  }
 }
 
 function buildProceduralSpecimen(def: CoronaryCase): SpecimenModel {

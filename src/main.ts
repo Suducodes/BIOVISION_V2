@@ -15,7 +15,7 @@ import type { GestureMode, HandLandmarks } from './gesture/types';
 import { ORGANS, type OrganDef } from './organs';
 import { buildOrganSwitcher, setActiveOrgan } from './ui/organSwitcher';
 import { SurgiLearn, CORONARY_SPECIMENS } from './surgilearn';
-import { loadCaseModel } from './surgilearn/specimenLoader';
+import { loadCaseModel, type SpecimenModel } from './surgilearn/specimenLoader';
 import { findCase } from './surgilearn/cases';
 
 // The anatomical library plus the SurgiLearn coronary case library. Appending
@@ -60,9 +60,9 @@ async function boot(): Promise<void> {
     // Coronary cases go through the SurgiLearn loader, which falls back to the
     // procedural arterial tree when the GLB has not been supplied yet.
     const caseDef = findCase(organ.caseId);
-    const model = caseDef
+    const model: SpecimenModel = caseDef
       ? await loadCaseModel(caseDef, organ.url, onProgress)
-      : await loadAnatomicalModel(organ.url, onProgress);
+      : { ...(await loadAnatomicalModel(organ.url, onProgress)), origin: 'glb' };
 
     // Swap the specimen and reset the view so each organ opens framed and level.
     stage.pivot.clear();
@@ -72,12 +72,13 @@ async function boot(): Promise<void> {
     zoomFar = stage.framingDistance;
     zoomNear = model.radius * 0.06;
 
-    const origin = 'origin' in model && model.origin === 'procedural'
-      ? 'procedural coronary tree (no GLB supplied)'
-      : organ.source;
+    const provenance =
+      model.origin === 'procedural'
+        ? 'procedural coronary tree (no GLB supplied)'
+        : organ.source;
 
     status.setSpecimen(organ.logTitle, [
-      ['Source', origin],
+      ['Source', provenance],
       ['Load', `${model.loadMs.toFixed(0)} ms`],
       ['Meshes', `${model.materials.length} part(s)`],
       ['Zoom', 'camera dives inside the specimen'],
@@ -90,7 +91,7 @@ async function boot(): Promise<void> {
     overlay.classList.add('hidden');
     switching = false;
 
-    surgilearn?.onSpecimenLoaded(organ);
+    surgilearn?.onSpecimenLoaded(organ, model.root, model.origin);
   };
 
   status.setMode('IDLE');
@@ -112,7 +113,8 @@ async function boot(): Promise<void> {
       await loadOrgan(specimen);
     },
   });
-  surgilearn.onSpecimenLoaded(SPECIMENS[0]!);
+  // The first specimen loaded before the layer existed, so hand it over now.
+  surgilearn.onSpecimenLoaded(SPECIMENS[0]!, stage.pivot.children[0]!, 'glb');
 
   // --- Gesture pipeline -------------------------------------------------
   // The mapper is driven at tracking cadence (~30 fps); the controller it

@@ -338,6 +338,151 @@
   min-height: 12px;
 }
 
+.mission-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 206, 106, 0.4);
+  border-radius: 8px;
+  background: rgba(255, 206, 106, 0.08);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.55;
+  color: var(--amber);
+}
+
+.mission-notice-action {
+  margin-left: auto;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 206, 106, 0.5);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.mission-notice-action:hover {
+  background: rgba(255, 206, 106, 0.16);
+}
+
+/* --- Region picker ------------------------------------------------------- */
+
+#sl-anchors {
+  top: 130px;
+  right: 30px;
+  width: 320px;
+  border-left: 2px solid var(--amber);
+}
+
+#sl-anchors.armed {
+  border-left-color: var(--teal);
+  box-shadow: 0 0 0 1px rgba(56, 224, 143, 0.4), 0 10px 34px rgba(0, 0, 0, 0.42);
+}
+
+.anchor-intro {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.anchor-rows {
+  display: grid;
+  gap: 5px;
+}
+
+.anchor-row {
+  display: grid;
+  grid-template-columns: 62px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.anchor-row b {
+  color: var(--text);
+  letter-spacing: 0.1em;
+}
+
+.anchor-value {
+  font-size: 9.5px;
+  opacity: 0.85;
+}
+
+.anchor-set {
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  color: var(--cyan-dim);
+}
+
+.anchor-row.placed {
+  border-color: rgba(56, 224, 143, 0.35);
+}
+
+.anchor-row.placed .anchor-value {
+  color: var(--teal);
+}
+
+.anchor-row.arming {
+  border-color: var(--teal);
+  background: rgba(56, 224, 143, 0.12);
+}
+
+.anchor-row.arming .anchor-set::after {
+  content: ' — CLICK THE VESSEL';
+  color: var(--teal);
+}
+
+.anchor-source {
+  margin-top: 12px;
+  padding: 10px;
+  max-height: 130px;
+  overflow: auto;
+  border: 1px solid rgba(70, 200, 255, 0.18);
+  border-radius: 7px;
+  background: #02060e;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  line-height: 1.6;
+  color: var(--teal);
+  white-space: pre;
+}
+
+.anchor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.anchor-actions .sl-button {
+  padding: 7px 11px;
+  font-size: 9.5px;
+}
+
+.anchor-flash {
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--cyan);
+}
+
 /* --- Hover reticle ------------------------------------------------------- */
 
 #sl-reticle {

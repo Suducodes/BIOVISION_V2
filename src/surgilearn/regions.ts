@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { REGION_INFO, caseRegions, type CoronaryCase, type RegionId } from './cases';
 import { buildRegionProxies } from './coronaryModel';
+import { DEFAULT_ANCHOR_RADIUS, loadAnchors, type AnchorSet } from './anchors';
 
 /**
  * Binds anatomical regions to meshes so the challenge layer can raycast, glow
@@ -40,7 +41,10 @@ const LESION = new THREE.Color(0xff5a1f);
 
 export class Region {
   readonly id: RegionId;
+  /** Meshes that are drawn and highlighted. */
   readonly meshes: THREE.Mesh[];
+  /** Meshes the hover raycast actually tests — coarse where one is available. */
+  readonly colliders: THREE.Mesh[];
   /** True when this region only exists as an invisible hover proxy. */
   readonly isProxy: boolean;
 
@@ -48,9 +52,12 @@ export class Region {
   private state: HighlightState = 'none';
   private pulse = 0;
 
-  constructor(id: RegionId, meshes: THREE.Mesh[], isProxy: boolean) {
+  constructor(id: RegionId, meshes: THREE.Mesh[], colliders: THREE.Mesh[], isProxy: boolean) {
     this.id = id;
     this.meshes = meshes;
+    // Falling back to the display meshes keeps a GLB that names its own vessels
+    // working; it just pays full triangle cost on the raycast.
+    this.colliders = colliders.length > 0 ? colliders : meshes;
     this.isProxy = isProxy;
 
     for (const mesh of meshes) {
@@ -131,57 +138,136 @@ export interface RegionSet {
   targets: THREE.Mesh[];
   /** Regions that had to be synthesised because the GLB did not name them. */
   synthesised: RegionId[];
+  /**
+   * True when a patient-derived specimen is being scored against reference
+   * anatomy rather than its own — i.e. the hover targets are guesses. The UI
+   * must say so rather than quietly marking a student wrong.
+   */
+  unmapped: boolean;
   update(elapsed: number): void;
   clear(): void;
   dispose(): void;
 }
 
 /**
+ * Region built from a clinician-placed anchor: a sphere sitting on the vessel,
+ * invisible until found, then glowing as the "you identified this" marker.
+ */
+function anchorRegion(id: RegionId, anchor: NonNullable<AnchorSet[RegionId]>): THREE.Mesh {
+  const radius = anchor.radius ?? DEFAULT_ANCHOR_RADIUS;
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 16, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0x34e3ff,
+      emissive: 0x34e3ff,
+      emissiveIntensity: 0,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      roughness: 0.5,
+      metalness: 0,
+    }),
+  );
+  mesh.position.fromArray(anchor.at);
+  mesh.name = `anchor-${id}`;
+  mesh.userData.surgilearnRegion = id;
+  return mesh;
+}
+
+/**
  * Resolves the case's regions against a loaded specimen, generating proxies for
  * anything the asset does not provide.
  */
-export function bindRegions(def: CoronaryCase, root: THREE.Object3D): RegionSet {
+export function bindRegions(
+  def: CoronaryCase,
+  root: THREE.Object3D,
+  /** Where the geometry came from — a real scan cannot be scored against
+   *  reference centrelines, the procedural tree is built from them. */
+  origin: 'glb' | 'procedural',
+): RegionSet {
+  // Everything this function adds to the scene lives under one group, so a
+  // rebind (after anchors are placed) can remove its predecessor wholesale
+  // instead of accumulating duplicate hover targets.
+  const container = new THREE.Group();
+  container.name = 'surgilearn-regions';
+  root.add(container);
+
   const wanted = caseRegions(def);
   const found = new Map<RegionId, THREE.Mesh[]>();
+  const foundColliders = new Map<RegionId, THREE.Mesh[]>();
 
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     const tag = child.userData.surgilearnRegion as RegionId | undefined;
     const id = tag ?? matchByName(child.name, wanted);
     if (!id || !wanted.includes(id)) return;
-    const list = found.get(id);
+    // Colliders carry the same region tag as the vessel they stand for, so
+    // route them away from the display list rather than double-counting.
+    const bucket = child.name.startsWith('collider-') ? foundColliders : found;
+    const list = bucket.get(id);
     if (list) list.push(child);
-    else found.set(id, [child]);
+    else bucket.set(id, [child]);
   });
 
-  const missing = wanted.filter((id) => !found.has(id));
-  const proxies = buildRegionProxies(def, missing, root);
-  if (missing.length > 0) {
-    console.info(
-      `[surgilearn] ${def.id}: generated hover proxies for ${missing.join(', ')} — ` +
-        'name the GLB meshes LAD / LCX / RCA / STENOSIS to bind them directly.',
-    );
-  }
+  // Anchors placed in the app override the ones checked into the case, so a
+  // clinician can relabel a specimen without a rebuild.
+  const anchors: AnchorSet = { ...def.regionAnchors, ...loadAnchors(def.id) };
 
   const regions: Region[] = [];
+  const anchored: RegionId[] = [];
+  const stillMissing: RegionId[] = [];
+
+  for (const id of wanted) {
+    if (found.has(id)) continue;
+    const anchor = anchors[id];
+    if (!anchor) {
+      stillMissing.push(id);
+      continue;
+    }
+    const mesh = anchorRegion(id, anchor);
+    container.add(mesh);
+    regions.push(new Region(id, [mesh], [mesh], true));
+    anchored.push(id);
+  }
+
+  // Only fall back to reference centrelines for what is still unaccounted for.
+  const proxies = buildRegionProxies(def, stillMissing, root, container);
+
   for (const id of wanted) {
     const direct = found.get(id);
     if (direct) {
-      regions.push(new Region(id, direct, false));
+      regions.push(new Region(id, direct, foundColliders.get(id) ?? [], false));
       continue;
     }
-    const proxy = proxies.get(id);
-    if (proxy) regions.push(new Region(id, proxy, true));
+    const proxy = proxies.meshes.get(id);
+    if (proxy) {
+      regions.push(new Region(id, proxy, proxies.colliders.get(id) ?? [], true));
+    }
+  }
+
+  // Reference geometry is only trustworthy on the procedural specimen, which
+  // is built from those very centrelines. On a real scan it is a guess.
+  const unmapped = origin === 'glb' && stillMissing.length > 0;
+  if (anchored.length > 0) {
+    console.info(`[surgilearn] ${def.id}: bound ${anchored.join(', ')} from placed anchors.`);
+  }
+  if (unmapped) {
+    console.warn(
+      `[surgilearn] ${def.id}: ${stillMissing.join(', ')} have no anchor on this specimen — ` +
+        'hover targets are reference anatomy and will not match the scan. ' +
+        'Open the region picker (📍 in the mission panel, or ?anchors=1) to place them.',
+    );
   }
 
   const byId = new Map(regions.map((r) => [r.id, r] as const));
-  const targets = regions.flatMap((r) => r.meshes);
+  const targets = regions.flatMap((r) => r.colliders);
 
   return {
     regions,
     byId,
     targets,
-    synthesised: missing,
+    synthesised: stillMissing,
+    unmapped,
     update(elapsed) {
       for (const region of regions) region.update(elapsed);
     },
@@ -190,6 +276,11 @@ export function bindRegions(def: CoronaryCase, root: THREE.Object3D): RegionSet 
     },
     dispose() {
       for (const region of regions) region.dispose();
+      // Drops every anchor sphere and reference proxy this bind created.
+      container.removeFromParent();
+      container.traverse((child) => {
+        if (child instanceof THREE.Mesh) child.geometry.dispose();
+      });
     },
   };
 }

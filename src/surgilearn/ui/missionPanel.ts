@@ -21,6 +21,9 @@ export class MissionPanel {
   private readonly clock = element('b', 'mission-clock', '00:00');
   private readonly scoreValue = element('b', 'mission-score-value', '100');
   private readonly penalty = element('div', 'mission-penalty');
+  private readonly notice = element('div', 'mission-notice sl-hidden');
+  private readonly noticeText = element('span');
+  private readonly noticeAction = element('button', 'mission-notice-action');
 
   private rows = new Map<string, { li: HTMLLIElement; fill: HTMLElement; box: HTMLElement }>();
   private buttons = new Map<Severity, HTMLButtonElement>();
@@ -56,9 +59,13 @@ export class MissionPanel {
     scoreCell.append(element('span', undefined, 'SCORE'), this.scoreValue);
     stats.append(timeCell, scoreCell);
 
+    this.noticeAction.type = 'button';
+    this.notice.append(this.noticeText, this.noticeAction);
+
     this.panel.body.append(
       this.caseLine,
       this.brief,
+      this.notice,
       this.list,
       this.orientation,
       grade,
@@ -127,6 +134,22 @@ export class MissionPanel {
     }
 
     if (snapshot.complete) this.lock();
+  }
+
+  /**
+   * Surfaces a caveat about the specimen itself — currently only used when a
+   * patient scan's vessels have not been labelled, so the student knows the
+   * hover targets are reference anatomy rather than their case.
+   */
+  setNotice(message: string | null, action?: { label: string; run: () => void }): void {
+    this.notice.classList.toggle('sl-hidden', message === null);
+    if (message === null) return;
+    this.noticeText.textContent = message;
+    this.noticeAction.classList.toggle('sl-hidden', !action);
+    if (action) {
+      this.noticeAction.textContent = action.label;
+      this.noticeAction.onclick = action.run;
+    }
   }
 
   /** Flags an incorrect grade without closing the objective. */

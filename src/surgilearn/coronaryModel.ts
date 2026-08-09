@@ -23,9 +23,48 @@ import type { CoronaryCase, Lesion, RegionId } from './cases';
 /** Named vessel meshes the challenge layer can bind regions to. */
 export interface CoronaryTree {
   root: THREE.Group;
-  /** Meshes keyed by the region they represent. */
+  /** Display meshes keyed by the region they represent. */
   meshes: Map<RegionId, THREE.Mesh[]>;
+  /** Coarse raycast-only stand-ins for the same regions — see {@link COLLIDER}. */
+  colliders: Map<RegionId, THREE.Mesh[]>;
   radius: number;
+}
+
+/**
+ * Collider resolution.
+ *
+ * Hover detection raycasts every rendered frame, and `THREE.Raycaster` has no
+ * acceleration structure: once the ray clears a mesh's bounding sphere it tests
+ * every triangle. Pointing at a display-resolution vessel therefore cost ~1.3 ms
+ * per frame — more than the entire scene render — and a patient-derived
+ * segmentation at 234k triangles would have been far worse.
+ *
+ * So identification raycasts against these instead: same centrelines, ~320
+ * triangles per vessel, never drawn. Two orders of magnitude cheaper, and the
+ * hit is identical at the tolerance a fingertip can actually hold.
+ */
+const COLLIDER = { tubular: 20, radial: 8 } as const;
+
+/** Slightly fatter than the artery it stands for, to forgive fingertip jitter. */
+const COLLIDER_RADIUS = 0.055;
+
+/** Invisible to the renderer (`material.visible`), still hit by the raycaster. */
+function colliderMaterial(): THREE.Material {
+  return new THREE.MeshBasicMaterial({ visible: false });
+}
+
+function colliderMesh(
+  geometry: THREE.BufferGeometry,
+  region: RegionId,
+  label: string,
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(geometry, colliderMaterial());
+  mesh.name = label;
+  mesh.userData.surgilearnRegion = region;
+  // `material.visible` rather than `object.visible`: the renderer skips it
+  // either way, but only the former is guaranteed to leave it raycastable.
+  mesh.frustumCulled = false;
+  return mesh;
 }
 
 type Pt = [number, number, number];
@@ -265,6 +304,7 @@ export function buildCoronaryTree(def: CoronaryCase): CoronaryTree {
   const root = new THREE.Group();
   root.name = 'coronary-tree';
   const meshes = new Map<RegionId, THREE.Mesh[]>();
+  const colliders = new Map<RegionId, THREE.Mesh[]>();
 
   const push = (region: RegionId, mesh: THREE.Mesh) => {
     mesh.name = region;
@@ -272,6 +312,13 @@ export function buildCoronaryTree(def: CoronaryCase): CoronaryTree {
     const list = meshes.get(region);
     if (list) list.push(mesh);
     else meshes.set(region, [mesh]);
+    root.add(mesh);
+  };
+
+  const pushCollider = (region: RegionId, mesh: THREE.Mesh) => {
+    const list = colliders.get(region);
+    if (list) list.push(mesh);
+    else colliders.set(region, [mesh]);
     root.add(mesh);
   };
 
@@ -283,6 +330,15 @@ export function buildCoronaryTree(def: CoronaryCase): CoronaryTree {
         : undefined;
     const geometry = variableTube(curve, radiusProfile(PROXIMAL_RADIUS[region], lesion));
     push(region, new THREE.Mesh(geometry, vesselMaterial()));
+
+    pushCollider(
+      region,
+      colliderMesh(
+        variableTube(curve, () => COLLIDER_RADIUS, COLLIDER.tubular, COLLIDER.radial),
+        region,
+        `collider-${region}`,
+      ),
+    );
 
     if (lesion && def.lesion) {
       // Invisible hover target over the narrowed segment. Opacity rather than
@@ -300,6 +356,10 @@ export function buildCoronaryTree(def: CoronaryCase): CoronaryTree {
         side: THREE.DoubleSide,
       });
       push('STENOSIS', new THREE.Mesh(stenosisSleeve(curve, def.lesion), sleeveMat));
+      pushCollider(
+        'STENOSIS',
+        colliderMesh(stenosisSleeve(curve, def.lesion), 'STENOSIS', 'collider-STENOSIS'),
+      );
     }
   }
 
@@ -314,6 +374,16 @@ export function buildCoronaryTree(def: CoronaryCase): CoronaryTree {
       10,
     );
     push(branch.parent, new THREE.Mesh(geometry, vesselMaterial()));
+    // Branches identify as their parent vessel, so a student who points at a
+    // diagonal has still found the LAD.
+    pushCollider(
+      branch.parent,
+      colliderMesh(
+        variableTube(curve, () => COLLIDER_RADIUS * 0.7, 12, COLLIDER.radial),
+        branch.parent,
+        `collider-${branch.parent}-branch`,
+      ),
+    );
   }
 
   root.add(aorticRoot(), myocardialGhost());
@@ -323,7 +393,7 @@ export function buildCoronaryTree(def: CoronaryCase): CoronaryTree {
     .getBoundingSphere(new THREE.Sphere())
     .radius;
 
-  return { root, meshes, radius };
+  return { root, meshes, colliders, radius };
 }
 
 function aorticRoot(): THREE.Mesh {
@@ -375,12 +445,17 @@ function myocardialGhost(): THREE.Mesh {
 export function buildRegionProxies(
   def: CoronaryCase,
   missing: RegionId[],
-  target: THREE.Object3D,
-): Map<RegionId, THREE.Mesh[]> {
+  /** Object whose extents the reference tree is fitted to. */
+  measureFrom: THREE.Object3D,
+  /** Where the generated meshes are parented — kept separate so a rebind can
+   *  drop them all at once. */
+  attachTo: THREE.Object3D,
+): { meshes: Map<RegionId, THREE.Mesh[]>; colliders: Map<RegionId, THREE.Mesh[]> } {
   const meshes = new Map<RegionId, THREE.Mesh[]>();
-  if (missing.length === 0) return meshes;
+  const colliders = new Map<RegionId, THREE.Mesh[]>();
+  if (missing.length === 0) return { meshes, colliders };
 
-  const box = new THREE.Box3().setFromObject(target);
+  const box = new THREE.Box3().setFromObject(measureFrom);
   const size = box.getSize(new THREE.Vector3());
   const centre = box.getCenter(new THREE.Vector3());
   // The reference tree spans ~2 units across its longest axis, matching the
@@ -406,29 +481,39 @@ export function buildRegionProxies(
     });
 
   for (const region of missing) {
-    if (region === 'STENOSIS') {
-      if (!def.lesion) continue;
-      const curve = curveOf(pathFor(def, def.lesion.vessel));
-      const mesh = new THREE.Mesh(stenosisSleeve(curve, def.lesion), proxyMaterial());
-      mesh.name = `proxy-${region}`;
-      mesh.userData.surgilearnRegion = region;
-      meshes.set(region, [mesh]);
-      group.add(mesh);
-      continue;
-    }
-    const curve = curveOf(pathFor(def, region));
-    const mesh = new THREE.Mesh(
-      variableTube(curve, () => 0.07, 64, 10),
-      proxyMaterial(),
-    );
+    const curve =
+      region === 'STENOSIS'
+        ? def.lesion && curveOf(pathFor(def, def.lesion.vessel))
+        : curveOf(pathFor(def, region));
+    if (!curve) continue;
+
+    const geometry =
+      region === 'STENOSIS' && def.lesion
+        ? stenosisSleeve(curve, def.lesion)
+        : variableTube(curve, () => 0.07, 48, 10);
+
+    const mesh = new THREE.Mesh(geometry, proxyMaterial());
     mesh.name = `proxy-${region}`;
     mesh.userData.surgilearnRegion = region;
     meshes.set(region, [mesh]);
     group.add(mesh);
+
+    // The display proxy only exists to glow once found; identification raycasts
+    // against this coarse twin instead so the per-frame cost stays flat however
+    // detailed the loaded specimen is.
+    const collider = colliderMesh(
+      region === 'STENOSIS' && def.lesion
+        ? stenosisSleeve(curve, def.lesion)
+        : variableTube(curve, () => 0.075, COLLIDER.tubular, COLLIDER.radial),
+      region,
+      `collider-${region}`,
+    );
+    colliders.set(region, [collider]);
+    group.add(collider);
   }
 
-  target.add(group);
-  return meshes;
+  attachTo.add(group);
+  return { meshes, colliders };
 }
 
 /**

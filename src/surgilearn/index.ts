@@ -1,3 +1,4 @@
+import type * as THREE from 'three';
 import type { Stage } from '../render/scene';
 import type { OrganDef } from '../organs';
 import { CASES, findCase, type CoronaryCase, type RegionId, type Severity } from './cases';
@@ -10,6 +11,7 @@ import { DebriefPanel } from './ui/debriefPanel';
 import { BadgeFlash, RegionLabel } from './ui/feedback';
 import { MissionPanel } from './ui/missionPanel';
 import { ModeBar, type Mode } from './ui/modeBar';
+import { AnchorPicker } from './ui/anchorPicker';
 import { element } from './ui/panel';
 import './surgilearn.css';
 
@@ -45,10 +47,14 @@ export class SurgiLearn {
   private readonly badges: BadgeFlash;
   private readonly modeBar: ModeBar;
 
+  private readonly picker: AnchorPicker;
+
   private mode: Mode = 'EXPLORE';
   private engine: ChallengeEngine | undefined;
   private regions: RegionSet | undefined;
   private activeCase: CoronaryCase | undefined;
+  private specimen: THREE.Object3D | undefined;
+  private specimenOrigin: 'glb' | 'procedural' = 'procedural';
   private foundRegions = new Set<RegionId>();
   private switching = false;
 
@@ -71,6 +77,13 @@ export class SurgiLearn {
       onMode: (mode) => void this.setMode(mode),
       onDashboard: () => this.dashboard.toggle(),
     });
+    this.picker = new AnchorPicker(
+      host.root,
+      host.stage.camera,
+      () => this.specimen,
+      host.stage.pivot,
+      () => this.rebindRegions(),
+    );
 
     // The top bar wraps on narrow screens, so its height is only knowable at
     // runtime. Publishing it as a custom property lets the left-rail panels
@@ -89,6 +102,14 @@ export class SurgiLearn {
       if (this.mode === 'CHALLENGE') this.probe.setPointer(event.clientX, event.clientY);
     });
     canvas.addEventListener('pointerleave', () => this.probe.clearPointer());
+    canvas.addEventListener('click', (event) => {
+      if (!this.picker.isArmed) return;
+      const rect = canvas.getBoundingClientRect();
+      this.picker.handleClick(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+    });
   }
 
   /** Latest index-fingertip position from the gesture pipeline, if any. */
@@ -97,13 +118,16 @@ export class SurgiLearn {
   }
 
   /** Called by the app after every specimen swap. */
-  onSpecimenLoaded(organ: OrganDef): void {
+  onSpecimenLoaded(organ: OrganDef, root: THREE.Object3D, origin: 'glb' | 'procedural'): void {
     this.regions?.dispose();
     this.regions = undefined;
     this.foundRegions.clear();
+    this.specimen = root;
+    this.specimenOrigin = origin;
 
     const def = findCase(organ.caseId);
     this.activeCase = def;
+    this.picker.hide();
 
     if (!def) {
       // A non-coronary specimen has no mission, so challenge mode cannot apply.
@@ -111,8 +135,35 @@ export class SurgiLearn {
       return;
     }
 
-    this.regions = bindRegions(def, this.host.stage.pivot);
+    this.picker.mount(def);
+    this.regions = bindRegions(def, this.host.stage.pivot, origin);
+    if (new URLSearchParams(location.search).has('anchors')) this.picker.show();
     if (this.mode === 'CHALLENGE') this.startChallenge(def);
+  }
+
+  /** Re-derives hover regions after anchors were placed or cleared. */
+  private rebindRegions(): void {
+    if (!this.activeCase) return;
+    this.regions?.dispose();
+    this.foundRegions.clear();
+    this.regions = bindRegions(this.activeCase, this.host.stage.pivot, this.specimenOrigin);
+    this.applyMappingNotice();
+  }
+
+  /**
+   * A real scan scored against reference centrelines would mark a student wrong
+   * for pointing at the right vessel, so say so rather than let it slide.
+   */
+  private applyMappingNotice(): void {
+    if (this.mode !== 'CHALLENGE' || !this.regions?.unmapped) {
+      this.mission.setNotice(null);
+      return;
+    }
+    this.mission.setNotice(
+      `${this.regions.synthesised.join(', ')} not yet labelled on this scan — ` +
+        'hover targets are reference anatomy.',
+      { label: '📍 LABEL VESSELS', run: () => this.picker.toggle() },
+    );
   }
 
   /** @param deltaMs milliseconds since the previous rendered frame */
@@ -188,11 +239,13 @@ export class SurgiLearn {
 
     this.mission.mount(def);
     this.mission.show();
+    this.applyMappingNotice();
     this.debrief.setNextLabel(this.isLastCase(def) ? 'START OVER →' : 'NEXT CASE →');
   }
 
   private teardownChallenge(): void {
     this.teardownEngine();
+    this.mission.setNotice(null);
     this.mission.hide();
     this.debrief.hide();
     this.label.hide();

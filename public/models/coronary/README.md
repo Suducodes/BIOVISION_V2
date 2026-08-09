@@ -1,12 +1,17 @@
 # Coronary case models
 
-Drop the case GLB files here:
+| File | Case | Present | Source |
+| --- | --- | --- | --- |
+| `case1.glb` | Case 1 | ✅ | `case_182_LCA_RCA.glb` — CTA segmentation, 109k tris |
+| `case2.glb` | Case 2 | ✅ | `case_193_LCA_RCA.glb` — CTA segmentation, 234k tris |
+| `case3.glb` | Case 3 | — | procedural (anomalous RCA origin) |
 
-| File | Case | Expected anatomy |
-| --- | --- | --- |
-| `case1.glb` | Case 1 — Normal anatomy | Healthy left and right systems |
-| `case2.glb` | Case 2 — Mild stenosis | Mid-LAD plaque, roughly 35–40% |
-| `case3.glb` | Case 3 — Severe + anomaly | Anomalous RCA origin from the left sinus, severe proximal lesion |
+Both supplied files are trimesh exports: a single unnamed mesh (`geometry_0`),
+no materials, fragmented into 30 and 62 disconnected islands in scanner
+millimetres. They therefore need **region anchors** placed once per case before
+the challenge can score them — see "Binding regions to a specimen" in
+[`README_SURGILEARN.md`](../../../README_SURGILEARN.md). They are given an
+arterial finish at load time, since the files carry no materials of their own.
 
 **Nothing here is required to run the platform.** When a file is missing,
 SurgiLearn renders a procedural coronary tree for that case instead: the LAD,

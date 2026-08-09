@@ -1,5 +1,6 @@
 import { asset } from '../paths';
 import type { OrganDef } from '../organs';
+import type { AnchorSet } from './anchors';
 
 /**
  * SurgiLearn case library.
@@ -94,11 +95,30 @@ export interface CoronaryCase {
   /** Correct answer for the classification objective. */
   answer: Severity;
   lesion?: Lesion;
+  /**
+   * Vessel labels for a patient-derived GLB, placed in the specimen's own
+   * normalised space. Only needed when the asset does not name its meshes —
+   * see {@link import('./anchors')}. Author them with the in-app picker and
+   * paste the result here.
+   */
+  regionAnchors?: AnchorSet;
   /** Case 3 models an RCA arising from the left coronary sinus. */
   anomalousRcaOrigin?: boolean;
   /** Offline teaching point, shown when no Claude API key is configured. */
   teaching: string;
 }
+
+/**
+ * ⚠️ CLINICAL CONTENT NEEDS A READ.
+ *
+ * Cases 1 and 2 now load patient-derived CTA segmentations (case_182 and
+ * case_193). The vignettes, lesion positions and answer keys below were
+ * authored against the procedural reference anatomy — they are NOT derived
+ * from those scans. Before this is put in front of a student, someone who can
+ * read the studies has to confirm what each one actually shows and correct
+ * `brief`, `answer`, `lesion` and `teaching` to match. Case 3 remains fully
+ * procedural, so its content is internally consistent.
+ */
 
 // Angiographic working views. Positive yaw swings the specimen's left side
 // away from the camera, which reads as a right anterior oblique projection;
@@ -113,7 +133,7 @@ export const CASES: CoronaryCase[] = [
     glyph: '◍',
     file: 'case1.glb',
     logTitle: 'CORONARY CASE 1 — BASELINE',
-    source: 'Coronary CTA reconstruction · normal anatomy',
+    source: 'Coronary CTA segmentation · case_182 (LCA + RCA)',
     title: 'CASE 1 · NORMAL ANATOMY',
     brief:
       '58F, atypical chest pain, low-risk stress test. CTA ordered for an anatomical baseline. Confirm a normal left system and grade any disease.',
@@ -133,7 +153,7 @@ export const CASES: CoronaryCase[] = [
     glyph: '◍',
     file: 'case2.glb',
     logTitle: 'CORONARY CASE 2 — MILD DISEASE',
-    source: 'Coronary CTA reconstruction · mid-LAD plaque',
+    source: 'Coronary CTA segmentation · case_193 (LCA + RCA)',
     title: 'CASE 2 · MILD STENOSIS',
     brief:
       '65M, chest pain on exertion, referred to the cath lab. Identify the culprit vessel, find the lesion and grade it.',
