@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import { createStage } from './render/scene';
 import { loadAnatomicalModel } from './render/modelLoader';
+import { disposeSpecimen } from './render/disposeSpecimen';
 import { InteractionController } from './controller/interactionController';
 import { attachMouseInput } from './input/mouseInput';
 import { Hud } from './ui/hud';
@@ -65,6 +66,12 @@ async function boot(): Promise<void> {
       : { ...(await loadAnatomicalModel(organ.url, onProgress)), origin: 'glb' };
 
     // Swap the specimen and reset the view so each organ opens framed and level.
+    // `clear()` only detaches the outgoing children from the scene graph — it
+    // never frees their GPU buffers — so every mesh under the pivot (the old
+    // specimen, and any SurgiLearn colliders/proxies parented alongside it)
+    // must be disposed explicitly first, or geometries and textures accumulate
+    // on every switch for the life of the session.
+    for (const child of stage.pivot.children) disposeSpecimen(child);
     stage.pivot.clear();
     stage.pivot.add(model.root);
     stage.frameSubject(model.radius);
