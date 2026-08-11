@@ -184,6 +184,18 @@ function curveOf(path: Pt[]): THREE.CatmullRomCurve3 {
 }
 
 /**
+ * The LAD centreline as a standalone curve, in the same normalised pivot
+ * frame every specimen is fitted into on load. Exposed for the psychomotor
+ * trace challenge, which overlays this path as a floating guide regardless
+ * of which specimen is currently loaded — the curve means the same thing in
+ * that shared coordinate space whether the heart, a lung, or a coronary case
+ * is on screen, so the challenge doesn't need to know or care which one it is.
+ */
+export function ladReferenceCurve(): THREE.CatmullRomCurve3 {
+  return curveOf(LAD_PATH);
+}
+
+/**
  * Tube geometry with a radius that varies along the curve.
  *
  * `THREE.TubeGeometry` only accepts a constant radius, and a stenosis that is

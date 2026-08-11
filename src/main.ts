@@ -4,6 +4,7 @@ import { createStage } from './render/scene';
 import { loadAnatomicalModel } from './render/modelLoader';
 import { disposeSpecimen } from './render/disposeSpecimen';
 import { GhostHand } from './render/ghostHand';
+import { unprojectLandmark } from './render/unprojectLandmark';
 import { InteractionController } from './controller/interactionController';
 import { attachMouseInput } from './input/mouseInput';
 import { Hud } from './ui/hud';
@@ -13,12 +14,14 @@ import { startHandTracking, type TrackerHandle } from './gesture/handTracker';
 import { GestureClassifier } from './gesture/gestureClassifier';
 import { GestureMapper } from './gesture/gestureMapper';
 import { HandOverlay } from './gesture/handOverlay';
-import type { GestureMode, HandLandmarks } from './gesture/types';
+import { LM, type GestureMode, type HandLandmarks } from './gesture/types';
 import { ORGANS, type OrganDef } from './organs';
 import { buildOrganSwitcher, setActiveOrgan } from './ui/organSwitcher';
 import { SurgiLearn, CORONARY_SPECIMENS } from './surgilearn';
 import { loadCaseModel, type SpecimenModel } from './surgilearn/specimenLoader';
 import { findCase } from './surgilearn/cases';
+import { TraceChallenge } from './surgilearn/trace/traceChallenge';
+import { TracePanel } from './surgilearn/trace/tracePanel';
 
 // The anatomical library plus the SurgiLearn coronary case library. Appending
 // rather than replacing keeps the original two specimens exactly where the
@@ -144,6 +147,42 @@ async function boot(): Promise<void> {
   // rotating the specimen never rotates the hand hovering over it.
   const ghostHand = new GhostHand(stage.scene);
 
+  // The Steady Hand psychomotor trace challenge — tracks the pivot's
+  // transform (see TraceChallenge.syncToPivot; it can't simply be parented
+  // to the pivot, since loadOrgan's pivot.clear() on every specimen switch
+  // would sweep it away), so the guide path rotates with whatever specimen
+  // is loaded. Deliberately independent of EXPLORE/CHALLENGE mode: it runs
+  // on top of whichever specimen happens to be on screen.
+  const traceChallenge = new TraceChallenge(stage.scene);
+  const tracePanel = new TracePanel(app, {
+    onStart: () => {
+      traceChallenge.start();
+      tracePanel.showLive();
+    },
+    onFinish: () => {
+      const result = traceChallenge.finish();
+      tracePanel.showResult(result);
+    },
+  });
+  tracePanel.hide();
+
+  const traceToggle = document.createElement('button');
+  traceToggle.type = 'button';
+  traceToggle.className = 'sl-dash-button';
+  traceToggle.title = 'Steady Hand — psychomotor trace challenge';
+  traceToggle.textContent = '🎯';
+  traceToggle.addEventListener('click', () => {
+    if (tracePanel.visible) {
+      tracePanel.hide();
+      traceChallenge.stop();
+    } else {
+      tracePanel.reset();
+      tracePanel.show();
+    }
+  });
+  document.getElementById('hud')!.insertAdjacentElement('beforebegin', traceToggle);
+  const fingerWorld = new THREE.Vector3();
+
   // Decouples "a hand is visible" from "the hand is manipulating the
   // specimen". Without this, simply holding a hand up to admire the hologram
   // also drags/zooms the organ — the manipulation model maps hand position
@@ -197,6 +236,8 @@ async function boot(): Promise<void> {
       enableGestures,
       surgilearn,
       ghostHand,
+      traceChallenge,
+      tracePanel,
       renderOnce: () => stage.renderer.render(stage.scene, stage.camera),
     },
   });
@@ -223,6 +264,23 @@ async function boot(): Promise<void> {
     // Primary hand only, matching the single-hand scope of the first pass —
     // undefined (no hand tracked, or tracking not enabled) hides the group.
     ghostHand.update(latestHands[0], stage.camera, stage.pivot);
+
+    if (traceChallenge.active || tracePanel.visible) {
+      traceChallenge.syncToPivot(stage.pivot);
+      const primaryHand = latestHands[0];
+      let fingerPos: THREE.Vector3 | null = null;
+      if (primaryHand) {
+        const hoverDistance = Math.max(
+          0.4,
+          stage.camera.position.distanceTo(stage.pivot.position) * 0.55,
+        );
+        fingerPos = unprojectLandmark(primaryHand[LM.INDEX_TIP]!, stage.camera, hoverDistance, fingerWorld);
+      }
+      const completed = traceChallenge.update(fingerPos, delta * 1000, clock.elapsedTime);
+      if (completed) tracePanel.showResult(completed);
+      else if (traceChallenge.active) tracePanel.renderLive(traceChallenge.liveAccuracyPct, traceChallenge.liveElapsedMs);
+    }
+
     stage.renderer.render(stage.scene, stage.camera);
     overlayRenderer?.draw(latestHands, latestMode);
     hud.markRender();
