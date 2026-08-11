@@ -3,6 +3,7 @@ import './style.css';
 import { createStage } from './render/scene';
 import { loadAnatomicalModel } from './render/modelLoader';
 import { disposeSpecimen } from './render/disposeSpecimen';
+import { GhostHand } from './render/ghostHand';
 import { InteractionController } from './controller/interactionController';
 import { attachMouseInput } from './input/mouseInput';
 import { Hud } from './ui/hud';
@@ -32,6 +33,7 @@ async function boot(): Promise<void> {
   const loadingText = document.getElementById('loading-text')!;
   const trackerCanvas = document.getElementById('tracker-canvas') as HTMLCanvasElement;
   const enableButton = document.getElementById('enable-camera') as HTMLButtonElement;
+  const hologramToggle = document.getElementById('hologram-toggle') as HTMLButtonElement;
 
   const stage = createStage(viewport);
   const controller = new InteractionController(stage.pivot);
@@ -138,23 +140,43 @@ async function boot(): Promise<void> {
   let latestMode: GestureMode = 'IDLE';
   let tracker: TrackerHandle | undefined;
 
+  // The holographic tracked-hand — camera-relative, not pivot-relative, so
+  // rotating the specimen never rotates the hand hovering over it.
+  const ghostHand = new GhostHand(stage.scene);
+
+  // Decouples "a hand is visible" from "the hand is manipulating the
+  // specimen". Without this, simply holding a hand up to admire the hologram
+  // also drags/zooms the organ — the manipulation model maps hand position
+  // straight onto specimen position unconditionally, by design (see
+  // interactionController.ts), so there was previously no way to hold the
+  // hand still to inspect it without the organ following along.
+  let hologramOnly = false;
+  hologramToggle.addEventListener('click', () => {
+    hologramOnly = !hologramOnly;
+    hologramToggle.setAttribute('aria-pressed', String(hologramOnly));
+  });
+
   const enableGestures = async () => {
     enableButton.disabled = true;
     enableButton.textContent = 'STARTING CAMERA…';
     try {
       tracker = await startHandTracking((frame) => {
         const signals = classifier.classify(frame.hands);
-        mapper.apply(signals);
+        if (!hologramOnly) mapper.apply(signals);
         // The fingertip doubles as a touchless cursor for the challenge layer;
         // it never feeds back into the manipulation pipeline.
         surgilearn?.setGestureTip(signals.indexTip);
         latestHands = frame.hands;
-        latestMode = signals.mode;
-        status.setMode(signals.mode);
+        // Frozen mode has no GRAB/ROTATE state of its own — showing the
+        // gesture classifier's mode while manipulation is disabled would
+        // read as active when it isn't.
+        latestMode = hologramOnly ? 'IDLE' : signals.mode;
+        status.setMode(latestMode);
         hud.markTracking(frame.inferenceMs);
       });
       overlayRenderer = new HandOverlay(trackerCanvas, tracker.video);
       enableButton.classList.add('hidden');
+      hologramToggle.classList.remove('hidden');
       document.getElementById('tracker-delegate')!.textContent = tracker.delegate;
       console.info(`[bio-vision] hand tracking using ${tracker.delegate} delegate`);
     } catch (error) {
@@ -174,6 +196,7 @@ async function boot(): Promise<void> {
       loadOrgan,
       enableGestures,
       surgilearn,
+      ghostHand,
       renderOnce: () => stage.renderer.render(stage.scene, stage.camera),
     },
   });
@@ -197,6 +220,9 @@ async function boot(): Promise<void> {
     // Runs after the controller so the challenge layer reads the same
     // orientation the frame is about to be drawn with.
     surgilearn?.update(delta * 1000);
+    // Primary hand only, matching the single-hand scope of the first pass —
+    // undefined (no hand tracked, or tracking not enabled) hides the group.
+    ghostHand.update(latestHands[0], stage.camera, stage.pivot);
     stage.renderer.render(stage.scene, stage.camera);
     overlayRenderer?.draw(latestHands, latestMode);
     hud.markRender();

@@ -499,6 +499,48 @@ body {
   display: none;
 }
 
+/* Hidden until gesture tracking is live — nothing to inspect before then. */
+#hologram-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px 5px 7px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: rgba(4, 10, 22, 0.86);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+#hologram-toggle .cam-glyph {
+  font-size: 12px;
+  line-height: 1;
+}
+
+#hologram-toggle:hover {
+  color: var(--text);
+  border-color: var(--edge-strong);
+}
+
+#hologram-toggle[aria-pressed='true'] {
+  color: var(--bg-0);
+  background: linear-gradient(180deg, #4fe6ff, var(--cyan));
+  border-color: transparent;
+  box-shadow: 0 2px 12px rgba(52, 227, 255, 0.35);
+}
+
+#hologram-toggle.hidden {
+  display: none;
+}
+
 /* --- Organ switcher ----------------------------------------------------- */
 
 #organ-switcher {
