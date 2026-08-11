@@ -499,11 +499,15 @@ body {
   display: none;
 }
 
-/* Hidden until gesture tracking is live — nothing to inspect before then. */
+/* Hidden until gesture tracking is live — nothing to inspect before then.
+   Sits over the bottom-left corner of the live camera feed once it appears
+   (not the top-right corner — that's already occupied by the
+   tracker-delegate/camera-fps readout in .tracker-label, and the two
+   overlapped there in testing). */
 #hologram-toggle {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  bottom: 10px;
+  left: 10px;
   z-index: 2;
   display: flex;
   align-items: center;
