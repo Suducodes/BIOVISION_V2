@@ -448,6 +448,14 @@ body {
   margin-right: 6px;
 }
 
+/* Positioning context for the enable-camera overlay button below — it needs
+   to sit on the video specifically, not "10px from the panel's bottom edge",
+   which stopped meaning the same thing once the gesture-vocabulary rows were
+   added underneath the video as normal-flow siblings. */
+.tracker-video-wrap {
+  position: relative;
+}
+
 #tracker-canvas {
   display: block;
   width: 100%;
@@ -496,52 +504,6 @@ body {
 }
 
 #enable-camera.hidden {
-  display: none;
-}
-
-/* Hidden until gesture tracking is live — nothing to inspect before then.
-   Sits over the bottom-left corner of the live camera feed once it appears
-   (not the top-right corner — that's already occupied by the
-   tracker-delegate/camera-fps readout in .tracker-label, and the two
-   overlapped there in testing). */
-#hologram-toggle {
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 9px 5px 7px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  background: rgba(4, 10, 22, 0.86);
-  color: var(--text-dim);
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-}
-
-#hologram-toggle .cam-glyph {
-  font-size: 12px;
-  line-height: 1;
-}
-
-#hologram-toggle:hover {
-  color: var(--text);
-  border-color: var(--edge-strong);
-}
-
-#hologram-toggle[aria-pressed='true'] {
-  color: var(--bg-0);
-  background: linear-gradient(180deg, #4fe6ff, var(--cyan));
-  border-color: transparent;
-  box-shadow: 0 2px 12px rgba(52, 227, 255, 0.35);
-}
-
-#hologram-toggle.hidden {
   display: none;
 }
 

@@ -102,18 +102,13 @@
             <span id="camera-fps"></span>
           </span>
         </div>
-        <canvas id="tracker-canvas" width="320" height="240"></canvas>
-        <button id="enable-camera" type="button">
-          <span class="cam-glyph">◉</span>
-          ENABLE GESTURE CONTROL
-        </button>
-        <!-- Decouples the ghost hand from specimen manipulation: with this on,
-             a tracked hand still renders as the hologram but no longer drags
-             or zooms the specimen, so it can be inspected in place. -->
-        <button id="hologram-toggle" type="button" class="hidden" aria-pressed="false" title="Freeze manipulation so the hand can be inspected without moving the specimen">
-          <span class="cam-glyph">✋</span>
-          HOLOGRAM ONLY
-        </button>
+        <div class="tracker-video-wrap">
+          <canvas id="tracker-canvas" width="320" height="240"></canvas>
+          <button id="enable-camera" type="button">
+            <span class="cam-glyph">◉</span>
+            ENABLE GESTURE CONTROL
+          </button>
+        </div>
       </section>
 
       <!-- Settings: live tuning of feel + look -->

@@ -184,15 +184,52 @@ function curveOf(path: Pt[]): THREE.CatmullRomCurve3 {
 }
 
 /**
- * The LAD centreline as a standalone curve, in the same normalised pivot
- * frame every specimen is fitted into on load. Exposed for the psychomotor
- * trace challenge, which overlays this path as a floating guide regardless
- * of which specimen is currently loaded — the curve means the same thing in
- * that shared coordinate space whether the heart, a lung, or a coronary case
- * is on screen, so the challenge doesn't need to know or care which one it is.
+ * Standalone, navigable vessel for the catheter-navigation challenge: same
+ * centreline and geometrically-narrowed lumen the main tree renders, but
+ * built and returned in isolation so the challenge can put it on its own
+ * render layer. That matters because the loaded specimen is sometimes a
+ * patient CTA scan whose own mesh has no per-vessel lumen labelling (see
+ * anchors.ts) — this reference geometry is what stays "actually accurate to
+ * the model" (real epicardial course, real geometric stenosis) in every
+ * case, real scan or procedural, since it's authored the same normalised
+ * pivot frame every specimen is fitted into on load.
  */
-export function ladReferenceCurve(): THREE.CatmullRomCurve3 {
-  return curveOf(LAD_PATH);
+export interface NavVessel {
+  region: 'LAD' | 'LCX' | 'RCA';
+  curve: THREE.CatmullRomCurve3;
+  radiusAt: (t: number) => number;
+  mesh: THREE.Mesh;
+  stenosisMesh?: THREE.Mesh;
+}
+
+export function buildNavVessel(def: CoronaryCase, region: 'LAD' | 'LCX' | 'RCA'): NavVessel {
+  const curve = curveOf(pathFor(def, region));
+  const lesion =
+    def.lesion && def.lesion.vessel === region
+      ? { at: def.lesion.at, severity: def.lesion.severity, halfWidth: LESION_HALF_WIDTH }
+      : undefined;
+  const radiusAt = radiusProfile(PROXIMAL_RADIUS[region], lesion);
+  const mesh = new THREE.Mesh(variableTube(curve, radiusAt, 128, 16), vesselMaterial());
+
+  let stenosisMesh: THREE.Mesh | undefined;
+  if (lesion && def.lesion) {
+    stenosisMesh = new THREE.Mesh(
+      stenosisSleeve(curve, def.lesion),
+      new THREE.MeshStandardMaterial({
+        color: 0xff7a2f,
+        emissive: 0xff5a1f,
+        emissiveIntensity: 0.4,
+        transparent: true,
+        opacity: 0.14,
+        depthWrite: false,
+        roughness: 0.6,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      }),
+    );
+  }
+
+  return { region, curve, radiusAt, mesh, stenosisMesh };
 }
 
 /**

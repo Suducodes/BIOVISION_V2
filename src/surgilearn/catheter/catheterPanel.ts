@@ -1,20 +1,20 @@
 import { createPanel, element, formatClock, type Panel } from '../ui/panel';
-import type { TraceResult } from './traceChallenge';
+import type { CatheterResult } from './catheterNav';
 
 /**
- * HUD for the Steady Hand trace challenge: live meters while an attempt is
- * running, a scorecard once it finishes. Deliberately standalone from the
- * mission panel — this challenge runs independently of EXPLORE/CHALLENGE
- * mode, on whatever specimen happens to be loaded, so it needed its own
- * unclaimed spot in the layout rather than assuming the mission panel's.
+ * HUD for catheter navigation: live meters while a run is in progress, a
+ * scorecard once it finishes. Standalone from the mission panel, same as the
+ * challenge it replaced — it runs on top of whatever coronary case happens to
+ * be loaded rather than being a step inside EXPLORE/CHALLENGE mode.
  */
-export class TracePanel {
+export class CatheterPanel {
   private readonly panel: Panel;
+  private readonly brief = element('p', 'trace-intro');
   private readonly live = element('div', 'trace-live');
-  private readonly accuracyValue = element('b');
-  private readonly smoothnessValue = element('b');
+  private readonly progressValue = element('b');
+  private readonly wallValue = element('b');
   private readonly timeValue = element('b', undefined, '00:00');
-  private readonly startButton = element('button', 'sl-button primary', 'START TRACE');
+  private readonly startButton = element('button', 'sl-button primary', 'INSERT GUIDEWIRE');
   private readonly finishButton = element('button', 'sl-button', 'FINISH');
   private readonly scorecard = element('div', 'trace-scorecard sl-hidden');
   private readonly scoreValue = element('div', 'trace-score-value');
@@ -27,16 +27,10 @@ export class TracePanel {
   ) {
     this.panel = createPanel({
       id: 'trace-panel',
-      title: 'STEADY HAND — LAD TRACE',
-      glyph: '🎯',
+      title: 'CATHETER NAVIGATION',
+      glyph: '🧭',
       className: 'sl-trace',
     });
-
-    const intro = element(
-      'p',
-      'trace-intro',
-      'Trace your bare fingertip along the glowing vessel path, start marker to finish marker. Scored live on path accuracy, motion smoothness, and time — the same axes real surgical-skill instruments grade.',
-    );
 
     this.startButton.type = 'button';
     this.startButton.addEventListener('click', handlers.onStart);
@@ -46,8 +40,8 @@ export class TracePanel {
 
     const meters = element('div', 'trace-meters');
     meters.append(
-      meterCell('ACCURACY', this.accuracyValue, '%'),
-      meterCell('SMOOTHNESS', this.smoothnessValue, '%'),
+      meterCell('PROGRESS', this.progressValue, '%'),
+      meterCell('WALL HITS', this.wallValue, ''),
       meterCell('TIME', this.timeValue, ''),
     );
     this.live.append(meters);
@@ -56,7 +50,7 @@ export class TracePanel {
     actions.append(this.startButton, this.finishButton);
 
     this.scoreBars.append(
-      scoreBar('accuracy-bar', 'ACCURACY'),
+      scoreBar('accuracy-bar', 'CENTRED'),
       scoreBar('smoothness-bar', 'SMOOTHNESS'),
       scoreBar('speed-bar', 'SPEED'),
     );
@@ -66,12 +60,22 @@ export class TracePanel {
       element('div', 'trace-score-label', 'TECHNICAL SKILL SCORE'),
       this.scoreValue,
       this.scoreBars,
-      element('div', 'trace-score-caption', '≈ OSATS-style technical-skill proxy — accuracy, smoothness of motion, and time on task'),
+      element(
+        'div',
+        'trace-score-caption',
+        '≈ OSATS-style technical-skill proxy — how centred the wire stayed, how smooth the steering was, and time to cross the lesion',
+      ),
       this.retryButton,
     );
 
-    this.panel.body.append(intro, this.live, actions, this.scorecard);
+    this.panel.body.append(this.brief, this.live, actions, this.scorecard);
     container.append(this.panel.el);
+  }
+
+  /** Sets the mission brief text before a run starts — which vessel, what
+   *  the target is — so the operator knows what they're about to do. */
+  setMission(text: string): void {
+    this.brief.textContent = text;
   }
 
   showLive(): void {
@@ -82,16 +86,17 @@ export class TracePanel {
     this.panel.setCollapsed(false);
   }
 
-  renderLive(accuracyPct: number, timeMs: number): void {
-    this.accuracyValue.textContent = String(Math.round(accuracyPct));
+  renderLive(progressPct: number, wallContacts: number, timeMs: number): void {
+    this.progressValue.textContent = String(Math.round(progressPct));
+    this.wallValue.textContent = String(wallContacts);
     this.timeValue.textContent = formatClock(timeMs);
   }
 
-  showResult(result: TraceResult): void {
+  showResult(result: CatheterResult): void {
     this.live.classList.add('sl-hidden');
     this.finishButton.classList.add('sl-hidden');
     this.startButton.classList.remove('sl-hidden');
-    this.startButton.textContent = 'TRACE AGAIN →';
+    this.startButton.textContent = 'RUN AGAIN →';
     this.scorecard.classList.remove('sl-hidden');
 
     this.scoreValue.textContent = String(result.score);
@@ -104,7 +109,7 @@ export class TracePanel {
   reset(): void {
     this.scorecard.classList.add('sl-hidden');
     this.startButton.classList.remove('sl-hidden');
-    this.startButton.textContent = 'START TRACE';
+    this.startButton.textContent = 'INSERT GUIDEWIRE';
     this.finishButton.classList.add('sl-hidden');
     this.live.classList.add('sl-hidden');
   }
