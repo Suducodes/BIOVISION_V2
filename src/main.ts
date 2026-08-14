@@ -13,6 +13,7 @@ import { GestureClassifier } from './gesture/gestureClassifier';
 import { GestureMapper } from './gesture/gestureMapper';
 import { HandOverlay } from './gesture/handOverlay';
 import { GestureCoach } from './ui/gestureCoach';
+import { heartbeat } from './render/heartbeat';
 import type { GestureMode, HandLandmarks } from './gesture/types';
 import { ORGANS, type OrganDef } from './organs';
 import { buildOrganSwitcher, setActiveOrgan } from './ui/organSwitcher';
@@ -22,6 +23,7 @@ import { findCase } from './surgilearn/cases';
 import { CatheterNav } from './surgilearn/catheter/catheterNav';
 import { CatheterPanel } from './surgilearn/catheter/catheterPanel';
 import { CatheterOverlay } from './surgilearn/catheter/catheterOverlay';
+import { CatheterCue } from './surgilearn/catheter/catheterCue';
 
 // The anatomical library plus the SurgiLearn coronary case library. Appending
 // rather than replacing keeps the original two specimens exactly where the
@@ -36,6 +38,7 @@ async function boot(): Promise<void> {
   const loadingText = document.getElementById('loading-text')!;
   const trackerCanvas = document.getElementById('tracker-canvas') as HTMLCanvasElement;
   const enableButton = document.getElementById('enable-camera') as HTMLButtonElement;
+  const pointerToggle = document.getElementById('pointer-toggle') as HTMLButtonElement;
 
   const stage = createStage(viewport);
   const controller = new InteractionController(stage.pivot);
@@ -106,7 +109,7 @@ async function boot(): Promise<void> {
     switching = false;
 
     surgilearn?.onSpecimenLoaded(organ, model.root, model.origin);
-    catheterNav?.onSpecimenLoaded(caseDef);
+    catheterNav?.onSpecimenLoaded(caseDef, model.root);
     // Catheter navigation needs a coronary case — there is no vessel lumen to
     // steer through on the heart or lungs. Without this the button stays fully
     // opaque and silently does nothing on those specimens, which reads as a
@@ -160,6 +163,11 @@ async function boot(): Promise<void> {
   const cameraFpsEl = document.getElementById('camera-fps')!;
   let overlayRenderer: HandOverlay | undefined;
   let latestHands: HandLandmarks[] = [];
+  // Catheter steering reads this instead of the EMA-smoothed set: CatheterNav
+  // runs its own damping (STEER_SMOOTH_MS/ADVANCE_SMOOTH_MS), tuned against
+  // raw input, so feeding it pre-smoothed landmarks stacks two filters and
+  // shows up as steering lag with no extra stability to show for it.
+  let latestRawHands: HandLandmarks[] = [];
   let latestMode: GestureMode = 'IDLE';
   let tracker: TrackerHandle | undefined;
 
@@ -181,15 +189,30 @@ async function boot(): Promise<void> {
   catheterNav = new CatheterNav(stage.scene);
   catheterNav.onSpecimenLoaded(findCase(SPECIMENS[0]!.caseId));
   const catheterOverlay = new CatheterOverlay(app);
+  // Mounted inside the video wrapper so it sits over the camera feed itself,
+  // scaling with it when focus mode enlarges the panel.
+  const catheterCue = new CatheterCue(
+    document.querySelector<HTMLElement>('.tracker-video-wrap')!,
+  );
+  // Focus mode clears the mission/dashboard/log panels out of the way — the
+  // split view needs the whole screen, and those belong to the other modes.
+  const setCatheterFocus = (on: boolean) => {
+    document.body.classList.toggle('catheter-focus', on);
+    if (on) catheterCue.show();
+    else catheterCue.hide();
+  };
+
   catheterPanel = new CatheterPanel(app, {
     onStart: () => {
       catheterNav!.start();
       catheterPanel!.showLive();
+      setCatheterFocus(true);
     },
     onFinish: () => {
       const result = catheterNav!.finish();
       catheterPanel!.showResult(result);
       catheterOverlay.hide();
+      setCatheterFocus(false);
     },
   });
   catheterPanel.hide();
@@ -205,6 +228,7 @@ async function boot(): Promise<void> {
       catheterPanel!.hide();
       catheterOverlay.hide();
       catheterNav!.stop();
+      setCatheterFocus(false);
     } else if (catheterNav!.ready) {
       catheterPanel!.reset();
       catheterPanel!.show();
@@ -212,17 +236,31 @@ async function boot(): Promise<void> {
   });
   document.getElementById('hud')!.insertAdjacentElement('beforebegin', catheterToggle);
 
+  // One hand normally drives GRAB (move + zoom) and the touchless identify
+  // cursor at once — signals.indexTip feeds the hover probe every frame
+  // regardless of mode, unconditionally, a few lines below. That means
+  // pointing at a vessel to hold on it also drags/zooms the specimen out
+  // from under the fingertip, which makes CHALLENGE mode's identify
+  // objectives fight the manipulation pipeline instead of cooperating with
+  // it. This toggle freezes manipulation the same way catheter-nav already
+  // does while it's steering, so the hand can point without also moving
+  // anything.
+  let pointerOnly = false;
+  pointerToggle.addEventListener('click', () => {
+    pointerOnly = !pointerOnly;
+    pointerToggle.setAttribute('aria-pressed', String(pointerOnly));
+  });
+
   const enableGestures = async () => {
     enableButton.disabled = true;
     enableButton.textContent = 'STARTING CAMERA…';
     try {
       tracker = await startHandTracking((frame) => {
         const signals = classifier.classify(frame.hands);
-        // Catheter navigation hijacks the tracked hand for steering, so the
-        // manipulation pipeline (move/rotate/zoom) has to stand down while
-        // it's active — otherwise the same hand would drag the specimen and
-        // steer the wire at once.
-        const suppressManipulation = catheterNav!.active;
+        // Catheter navigation hijacks the tracked hand for steering the same
+        // way pointer mode hijacks it for identifying — either one means the
+        // hand's motion must not also drag/zoom the specimen at the same time.
+        const suppressManipulation = pointerOnly || catheterNav!.active;
         if (!suppressManipulation) mapper.apply(signals);
         // The fingertip doubles as a touchless cursor for the challenge layer;
         // it never feeds back into the manipulation pipeline.
@@ -231,6 +269,7 @@ async function boot(): Promise<void> {
         // output — catheter-nav steering benefits from the same EMA the
         // manipulation pipeline already relies on to feel stable.
         latestHands = classifier.smoothedHands;
+        latestRawHands = frame.hands;
         // Frozen mode has no GRAB/ROTATE state of its own — showing the
         // gesture classifier's mode while manipulation is disabled would
         // read as active when it isn't.
@@ -241,6 +280,7 @@ async function boot(): Promise<void> {
       });
       overlayRenderer = new HandOverlay(trackerCanvas, tracker.video);
       enableButton.classList.add('hidden');
+      pointerToggle.classList.remove('hidden');
       gestureCoach.show();
       document.getElementById('tracker-delegate')!.textContent = tracker.delegate;
       console.info(`[bio-vision] hand tracking using ${tracker.delegate} delegate`);
@@ -275,11 +315,29 @@ async function boot(): Promise<void> {
   const MIN_SPLIT_WIDTH = 900;
   const canvasSize = new THREE.Vector2();
 
+  // A living specimen, not a static model — see render/heartbeat.ts for the
+  // envelope. Applied to the pivot so it carries through to whatever's
+  // currently loaded without per-specimen wiring.
+  const HEARTBEAT_SCALE = 0.028;
+  // The pulse eases out the moment a hand is tracked, and back in when the
+  // hand leaves. A specimen that keeps breathing while someone is trying to
+  // hold a fingertip on a 5mm vessel is actively fighting them — the beat is
+  // for the idle "this is alive" beat of the demo, not for while you work.
+  let heartbeatGain = 1;
+  const HEARTBEAT_FADE_PER_S = 4;
+
   const clock = new THREE.Clock();
   const renderLoop = () => {
     requestAnimationFrame(renderLoop);
     const delta = clock.getDelta();
     controller.update(delta);
+
+    const handPresent = latestHands.length > 0;
+    const gainTarget = handPresent ? 0 : 1;
+    heartbeatGain += (gainTarget - heartbeatGain) * Math.min(1, HEARTBEAT_FADE_PER_S * delta);
+    stage.pivot.scale.setScalar(
+      1 + heartbeat(clock.elapsedTime) * HEARTBEAT_SCALE * heartbeatGain,
+    );
 
     const catheterOn = catheterNav!.active;
 
@@ -308,14 +366,22 @@ async function boot(): Promise<void> {
 
 
     if (catheterOn || catheterPanel!.visible) {
-      const completed = catheterNav!.update(latestHands[0], delta * 1000, clock.elapsedTime);
+      const primaryHand = latestRawHands[0];
+      const completed = catheterNav!.update(primaryHand, delta * 1000, clock.elapsedTime);
       if (completed) {
         catheterPanel!.showResult(completed);
         catheterOverlay.hide();
+        setCatheterFocus(false);
       } else if (catheterOn) {
         catheterPanel!.renderLive(catheterNav!.liveProgressPct, catheterNav!.liveWallContacts, catheterNav!.liveElapsedMs);
         catheterOverlay.show();
         catheterOverlay.update(catheterNav!.liveProgressPct, catheterNav!.liveWallContact);
+        // Cue goes quiet once the hand is actually inside the band the
+        // advance/steer axes read from — same constants as catheterNav.
+        const tip = primaryHand?.[8];
+        catheterCue.setLocked(
+          !!tip && tip.y > 0.16 && tip.y < 0.84 && tip.x > 0.28 && tip.x < 0.72,
+        );
       }
     }
 

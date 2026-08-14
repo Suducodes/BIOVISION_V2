@@ -133,6 +133,16 @@
   line-height: 1;
   cursor: pointer;
   transition: background 0.2s ease;
+  /* The dashboard button (📊) is protected from the same fate by living
+     inside .sl-modebar, which sets flex-shrink:0 on itself. The catheter-nav
+     toggle (🧭) is a bare sibling of the organ switcher directly in #top-bar
+     with no such parent, so without this it silently shrank to a fraction of
+     its width under space pressure (flex items default to shrinkable with
+     min-width:auto) — same class, same declared size, but visibly and
+     confusingly smaller than 📊 right next to it. Setting this here means
+     every button sharing this class is protected regardless of what it's
+     nested inside. */
+  flex-shrink: 0;
 }
 
 .sl-dash-button:hover:not(:disabled) {
@@ -639,6 +649,121 @@
     max-height: 50vh;
     overflow-y: auto;
   }
+}
+
+/* --- Catheter focus mode --------------------------------------------------
+   Catheter navigation is the one mode that genuinely needs the whole screen:
+   two 3D viewports side by side, plus the camera feed the operator is
+   steering from. Everything that belongs to the *other* modes — the mission
+   checklist, the dashboard, the specimen log, the gesture legend, the
+   tuning gear — is dead weight there and was covering the split view. This
+   clears the stage down to: the two panes, an enlarged camera feed, and the
+   catheter panel itself. */
+
+body.catheter-focus #notes,
+body.catheter-focus #legend,
+body.catheter-focus #settings-toggle,
+body.catheter-focus #settings,
+body.catheter-focus #sl-mission,
+body.catheter-focus #sl-dashboard,
+body.catheter-focus #sl-anchors,
+body.catheter-focus .sl-region-label {
+  display: none !important;
+}
+
+/* The top bar stays (it's the way out of the mode) but recedes. */
+body.catheter-focus #top-bar {
+  opacity: 0.35;
+  transition: opacity 0.25s ease;
+}
+
+body.catheter-focus #top-bar:hover {
+  opacity: 1;
+}
+
+/* Bigger camera feed: this is the operator's hand-eye reference while
+   steering, so it stops being a thumbnail and becomes an instrument. */
+body.catheter-focus #tracker-panel {
+  width: 400px;
+}
+
+@media (max-height: 800px) {
+  body.catheter-focus #tracker-panel {
+    width: 340px;
+  }
+}
+
+/* --- Hand-placement cue (over the camera feed) ---------------------------- */
+
+.cath-cue {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* The vertical band the advance axis actually reads from — Y_ADVANCE_LOW..
+   HIGH in catheterNav.ts (0.16–0.84). Drawn to scale so "put your hand in
+   the box" is literally true rather than decorative. */
+.cath-cue-band {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  top: 16%;
+  bottom: 16%;
+  border: 1px dashed rgba(52, 227, 255, 0.55);
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(52, 227, 255, 0.14),
+    rgba(52, 227, 255, 0.02) 50%,
+    rgba(255, 206, 106, 0.14)
+  );
+}
+
+.cath-cue-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.cath-cue-label.top {
+  top: 7%;
+  color: var(--cyan);
+}
+
+.cath-cue-label.bottom {
+  bottom: 7%;
+  color: var(--amber);
+}
+
+.cath-cue-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 34%;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #fff;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.95);
+}
+
+/* Once the hand is in range the cue stops shouting and just frames. */
+.cath-cue.locked .cath-cue-band {
+  border-color: rgba(56, 224, 143, 0.6);
+  background: rgba(56, 224, 143, 0.06);
+}
+
+.cath-cue.locked .cath-cue-hint {
+  display: none;
 }
 
 /* --- Catheter navigation split view --------------------------------------- */

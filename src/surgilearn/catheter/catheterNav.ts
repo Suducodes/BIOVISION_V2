@@ -2,7 +2,21 @@ import * as THREE from 'three';
 import type { HandLandmarks } from '../../gesture/types';
 import { LM } from '../../gesture/types';
 import { buildNavVessel, type NavVessel } from '../coronaryModel';
+import { heartbeat } from '../../render/heartbeat';
 import type { CoronaryCase } from '../cases';
+
+/**
+ * The transform actually applied to the currently-loaded specimen's root
+ * (its `.position` / `.scale`, read straight from the live Object3D) —
+ * required so the nav vessel this class builds lands exactly where the real,
+ * displayed vessel does rather than at the raw, un-normalised centreline
+ * coordinates, which are a fixed offset away from it (see buildNavVessel's
+ * NavTransform doc in coronaryModel.ts for the full story).
+ */
+export interface SpecimenTransform {
+  position: THREE.Vector3;
+  scale: number;
+}
 
 /**
  * Catheter/guidewire navigation through the coronary lumen.
@@ -38,9 +52,26 @@ const X_STEER_HIGH = 0.72;
 const Z_STEER_RANGE = 0.16;
 
 // Exponential smoothing time constants — enough to soak up webcam/tracking
-// jitter without feeling laggy to steer.
-const ADVANCE_SMOOTH_MS = 220;
-const STEER_SMOOTH_MS = 140;
+// jitter without feeling laggy to steer. Advance is deliberately snappier
+// than it looks: the real speed limiter is MAX_ADVANCE_RATE below, so this
+// can stay low (responsive) without the wire ever bolting down the vessel.
+const ADVANCE_SMOOTH_MS = 120;
+const STEER_SMOOTH_MS = 90;
+
+// Hard ceiling on how fast the wire can travel, in curve-parameter units per
+// second. Without this, hand position maps *absolutely* onto position along
+// the vessel, so a single top-to-bottom sweep of the hand teleports the
+// catheter through the entire artery in one motion — the opposite of the
+// slow, deliberate advance the real procedure is about. Clamping the rate
+// (rather than damping harder, which just adds lag without a speed limit)
+// means a big hand movement still means "keep going", it just can't
+// fast-forward: ~7s minimum end to end.
+const MAX_ADVANCE_RATE = 0.14;
+
+// The camera bobs very slightly with each beat, and the headlamp flushes.
+// Deliberately small — this should read as "the artery is alive" at the edge
+// of perception, not as a shaking camera that makes the lumen hard to steer.
+const CAMERA_BOB = 0.004;
 
 // A steering deflection can reach this far past the "safe" radius before
 // being clamped — past DEFLECT_REACH is the same as bottoming out, which is
@@ -162,10 +193,20 @@ export class CatheterNav {
     this.rig.scale.copy(pivot.scale);
   }
 
-  /** Called after every specimen swap — rebuilds the dedicated nav geometry
-   *  for whichever vessel this case's mission targets (the lesion vessel, or
-   *  the LAD when the case is a clean baseline). */
-  onSpecimenLoaded(def: CoronaryCase | undefined): void {
+  /**
+   * Called after every specimen swap — rebuilds the dedicated nav geometry
+   * for whichever vessel this case's mission targets (the lesion vessel, or
+   * the LAD when the case is a clean baseline).
+   *
+   * @param specimenRoot the just-loaded specimen's root Object3D (a direct
+   *   child of the pivot, same as this class's own rig — see syncToPivot).
+   *   Its position/scale *is* the normalisation transform applied on load
+   *   (see normaliseTree in coronaryModel.ts), and the nav vessel has to go
+   *   through that same transform or it sits at the raw, un-normalised
+   *   centreline coordinates — visibly off from the real vessel, not
+   *   "somewhere in the object" but somewhere near it.
+   */
+  onSpecimenLoaded(def: CoronaryCase | undefined, specimenRoot?: THREE.Object3D): void {
     this.stop();
     this.disposeVessel();
 
@@ -174,8 +215,12 @@ export class CatheterNav {
       return;
     }
 
+    const transform: SpecimenTransform | undefined = specimenRoot
+      ? { position: specimenRoot.position.clone(), scale: specimenRoot.scale.x }
+      : undefined;
+
     const region = def.lesion?.vessel ?? 'LAD';
-    this.vessel = buildNavVessel(def, region);
+    this.vessel = buildNavVessel(def, region, transform);
     this.vessel.mesh.layers.set(NAV_LAYER);
     this.rig.add(this.vessel.mesh);
     if (this.vessel.stenosisMesh) {
@@ -270,11 +315,22 @@ export class CatheterNav {
       const targetN = mapRange(1 - tip.x, X_STEER_LOW, X_STEER_HIGH, -1, 1);
       const targetB = clamp(tip.z / Z_STEER_RANGE, -1, 1);
 
-      this.t = damp(this.t, targetT, ADVANCE_SMOOTH_MS, deltaMs);
+      // Ease toward the hand's requested position, then hard-clamp how far
+      // that's allowed to move this frame. The clamp is what actually sets
+      // the feel — see MAX_ADVANCE_RATE.
+      const eased = damp(this.t, targetT, ADVANCE_SMOOTH_MS, deltaMs);
+      const maxStep = MAX_ADVANCE_RATE * (deltaMs / 1000);
+      this.t = clamp(eased, this.t - maxStep, this.t + maxStep);
+
       this.steerN = damp(this.steerN, targetN, STEER_SMOOTH_MS, deltaMs);
       this.steerB = damp(this.steerB, targetB, STEER_SMOOTH_MS, deltaMs);
       this.elapsedMs += deltaMs;
     }
+
+    // Cardiac cycle, same 72 BPM lub-dub the specimen pulses on — drives the
+    // wall pulse and camera bob below so the lumen feels alive rather than
+    // like a static tube.
+    const beat = heartbeat(nowSeconds);
 
     this.vessel.curve.getPointAt(this.t, this.scratchPoint);
     this.vessel.curve.getTangentAt(this.t, this.scratchTangent).normalize();
@@ -286,6 +342,13 @@ export class CatheterNav {
     this.scratchLocalUp.copy(this.worldUp).applyQuaternion(this.scratchInvQuat);
     this.buildFrame(this.scratchTangent, this.scratchLocalUp, this.scratchN, this.scratchB);
 
+    // Deliberately no geometric wall pulse: the tube mesh can't be scaled to
+    // fake one, because a uniform scale contracts it toward the rig origin
+    // rather than radially about its own centreline — which would slide the
+    // vessel out from under the camera that's following that centreline.
+    // Doing it properly means per-vertex displacement, which isn't worth a
+    // shader rewrite here. The bob and the headlamp flush below carry the
+    // "this artery is alive" read on their own.
     const radius = this.vessel.radiusAt(this.t);
     const safe = radius * SAFE_FRACTION;
     this.scratchOffset
@@ -299,6 +362,10 @@ export class CatheterNav {
     if (mag > safe) this.scratchOffset.setLength(safe);
 
     this.camera.position.copy(this.scratchPoint).add(this.scratchOffset);
+    // Tiny along-axis bob on each beat — the vessel pushing past the wire.
+    this.camera.position.addScaledVector(this.scratchTangent, beat * CAMERA_BOB);
+    // Headlamp brightens fractionally on systole, so the walls "flush".
+    this.headlamp.intensity = 6 + beat * 2.2;
     this.vessel.curve.getPointAt(Math.min(1, this.t + LOOKAHEAD_T), this.scratchLook);
     // lookAt expects a world-space target (it corrects for the parent's
     // rotation internally) — the target above is rig-local, so it has to be

@@ -108,6 +108,14 @@
             <span class="cam-glyph">◉</span>
             ENABLE GESTURE CONTROL
           </button>
+          <!-- One hand normally drives both manipulation (move/zoom) and the
+               touchless identify cursor at once, so pointing at a vessel to
+               hold on it also drags/zooms the specimen out from under the
+               fingertip. This freezes manipulation so the hand only points. -->
+          <button id="pointer-toggle" type="button" class="hidden" aria-pressed="false" title="Freeze move/zoom so the hand only points — for identifying vessels without dragging the specimen">
+            <span class="cam-glyph">👆</span>
+            POINTER MODE
+          </button>
         </div>
       </section>
 

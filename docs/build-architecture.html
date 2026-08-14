@@ -1,0 +1,791 @@
+<title>Bio-Vision — Submission Build Architecture</title>
+<style>
+  :root {
+    --ground: #f5f7f8;
+    --surface: #ffffff;
+    --surface-sunk: #eef1f3;
+    --ink: #14202b;
+    --ink-soft: #566875;
+    --ink-faint: #8496a2;
+    --accent: #0e6b7a;
+    --accent-soft: #d9e9ec;
+    --critical: #a32b31;
+    --critical-soft: #f6e3e4;
+    --warn: #7d5a0f;
+    --warn-soft: #f7ecd6;
+    --rule: #dbe2e6;
+    --rule-strong: #c3ced5;
+
+    --display: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0b0f14;
+      --surface: #121a21;
+      --surface-sunk: #0e151b;
+      --ink: #e4eaef;
+      --ink-soft: #93a5b2;
+      --ink-faint: #6c7f8d;
+      --accent: #55c6d6;
+      --accent-soft: #12313a;
+      --critical: #e8686e;
+      --critical-soft: #331a1c;
+      --warn: #e0b34a;
+      --warn-soft: #2e2513;
+      --rule: #222e38;
+      --rule-strong: #33434f;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0b0f14;
+    --surface: #121a21;
+    --surface-sunk: #0e151b;
+    --ink: #e4eaef;
+    --ink-soft: #93a5b2;
+    --ink-faint: #6c7f8d;
+    --accent: #55c6d6;
+    --accent-soft: #12313a;
+    --critical: #e8686e;
+    --critical-soft: #331a1c;
+    --warn: #e0b34a;
+    --warn-soft: #2e2513;
+    --rule: #222e38;
+    --rule-strong: #33434f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 56px 28px 120px;
+  }
+
+  /* ---- Masthead ---- */
+
+  .masthead {
+    border-bottom: 3px solid var(--ink);
+    padding-bottom: 26px;
+    margin-bottom: 14px;
+  }
+
+  .kicker {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 18px;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(34px, 6vw, 58px);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
+    text-wrap: balance;
+    margin: 0 0 18px;
+  }
+
+  .thesis {
+    font-size: clamp(17px, 2.4vw, 21px);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0;
+  }
+
+  .thesis strong { color: var(--ink); font-weight: 600; }
+
+  .stamp-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 56px;
+  }
+
+  .stamp {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 6px 11px;
+    border: 1px solid var(--rule-strong);
+    border-radius: 3px;
+    color: var(--ink-soft);
+    background: var(--surface);
+  }
+
+  .stamp.hot { border-color: var(--critical); color: var(--critical); }
+
+  /* ---- Sections ---- */
+
+  section { margin-bottom: 68px; }
+
+  h2 {
+    font-family: var(--display);
+    font-size: clamp(22px, 3.4vw, 30px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    text-wrap: balance;
+    margin: 0 0 8px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  h3 {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    margin: 34px 0 10px;
+  }
+
+  h4 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 26px 0 8px;
+    font-weight: 600;
+  }
+
+  p { margin: 0 0 15px; max-width: 70ch; }
+  ul, ol { margin: 0 0 15px; padding-left: 22px; max-width: 70ch; }
+  li { margin-bottom: 7px; }
+
+  .lede { color: var(--ink-soft); max-width: 70ch; margin-bottom: 26px; }
+
+  a { color: var(--accent); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    background: var(--surface-sunk);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    background: var(--surface-sunk);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 0 0 18px;
+  }
+
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+  .cmt { color: var(--ink-faint); }
+
+  /* ---- Verdict table ---- */
+
+  .scroller { overflow-x: auto; margin-bottom: 20px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    min-width: 620px;
+  }
+
+  th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    text-align: left;
+    padding: 0 14px 9px 0;
+    border-bottom: 1px solid var(--rule-strong);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 11px 14px 11px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+
+  .tag.keep { background: var(--accent-soft); color: var(--accent); }
+  .tag.hide { background: var(--warn-soft); color: var(--warn); }
+  .tag.cut  { background: var(--critical-soft); color: var(--critical); }
+
+  /* ---- Callouts ---- */
+
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    padding: 16px 20px;
+    margin: 0 0 20px;
+    border-radius: 0 4px 4px 0;
+  }
+
+  .note.risk { border-left-color: var(--critical); }
+  .note.warn { border-left-color: var(--warn); }
+
+  .note p:last-child { margin-bottom: 0; }
+
+  .note-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  /* ---- Phase timeline (real sequence — numbering earns its place) ---- */
+
+  .phase {
+    display: grid;
+    grid-template-columns: 74px 1fr;
+    gap: 20px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+    align-items: start;
+  }
+
+  .phase-time {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+    padding-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .phase-body h4 { margin-top: 0; }
+  .phase-body p:last-child, .phase-body ul:last-child { margin-bottom: 0; }
+
+  /* ---- Shot list ---- */
+
+  .shot {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 18px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .shot-tc {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    padding-top: 2px;
+    white-space: nowrap;
+  }
+
+  .shot b { display: block; margin-bottom: 3px; font-size: 15px; }
+  .shot span { color: var(--ink-soft); font-size: 14px; }
+
+  .rubric {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-faint);
+    border: 1px solid var(--rule-strong);
+    border-radius: 3px;
+    padding: 1px 6px;
+    margin-top: 6px;
+  }
+
+  @media (max-width: 620px) {
+    .wrap { padding: 36px 18px 80px; }
+    .phase, .shot { grid-template-columns: 1fr; gap: 6px; }
+  }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="kicker">IEEE Metaverse Grand Challenge 2026 · Healthcare Track</p>
+    <h1>Bio-Vision: Submission Build Architecture</h1>
+    <p class="thesis">One build day, one layer of new code. Everything below serves a single claim: <strong>surgical simulation with no simulator — patient-specific anatomy training on any laptop with a webcam, so the institutions with the worst cadaver ratios aren't the ones priced out of the fix.</strong></p>
+  </header>
+
+  <div class="stamp-row">
+    <span class="stamp">Written 13 Aug 2026, night</span>
+    <span class="stamp">Build day: 14 Aug</span>
+    <span class="stamp hot">Submission closes 15 Aug</span>
+    <span class="stamp">Deliverable: 5 slides + 5–7 min MP4</span>
+  </div>
+
+  <section>
+    <h2>Why this document exists</h2>
+    <p class="lede">The last three weeks added features. None of them were the problem, and none of them were the fix. This pins down what ships, what hides, and the one thing left to build.</p>
+
+    <p>The diagnosis, stated plainly: the platform is not under-built, it is under-evidenced. Simulation Effectiveness (25%) and Educational Impact (20%) together are <strong>45% of the rubric</strong>, and both ask whether anyone actually learned anything. The 2025 healthcare winner answered that with nine nursing students and a before/after table. Bio-Vision currently answers it with zero.</p>
+
+    <p>So tomorrow builds a study instrument, not a feature. Everything else is selection and storytelling.</p>
+  </section>
+
+  <section>
+    <h2>Existing system — inventory and verdict</h2>
+    <p class="lede">What is already in the repo, and what each thing does on submission day. "Hide" means it stays in the build and stays out of the video.</p>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Subsystem</th><th>Where</th><th>Verdict</th><th>Reasoning</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Webcam hand tracking → specimen manipulation</td>
+            <td class="num">gesture/, controller/</td>
+            <td><span class="tag keep">Hero</span></td>
+            <td>This is the thesis. Everything else is evidence that the thesis is useful.</td>
+          </tr>
+          <tr>
+            <td>Patient CTA specimens + procedural fallback</td>
+            <td class="num">specimenLoader.ts</td>
+            <td><span class="tag keep">Hero</span></td>
+            <td>"Real patient data, not a cartoon" — carries Simulation Effectiveness.</td>
+          </tr>
+          <tr>
+            <td>CHALLENGE mode: mission, dwell-identify, grading</td>
+            <td class="num">engine.ts, hoverProbe.ts</td>
+            <td><span class="tag keep">Hero</span></td>
+            <td>The actual learning loop, and the source of all process telemetry.</td>
+          </tr>
+          <tr>
+            <td>AI debrief</td>
+            <td class="num">tutor.ts, debriefPanel.ts</td>
+            <td><span class="tag keep">Keep</span></td>
+            <td>Carries the AI/Gamification 10% on its own. Needs a working key on demo day.</td>
+          </tr>
+          <tr>
+            <td>Catheter navigation split-view</td>
+            <td class="num">catheter/</td>
+            <td><span class="tag keep">Finale</span></td>
+            <td>Strongest single image you own. 40 seconds at the end — not the spine.</td>
+          </tr>
+          <tr>
+            <td>Progress store, badges, leaderboard</td>
+            <td class="num">store.ts, dashboard.ts</td>
+            <td><span class="tag hide">Partial</span></td>
+            <td>Badges/leaderboard are a 3-second cutaway. The store is load-bearing for the study.</td>
+          </tr>
+          <tr>
+            <td>Ghost hologram hand</td>
+            <td class="num">ghostHand.ts</td>
+            <td><span class="tag hide">Hide</span></td>
+            <td>Beautiful, but it competes with the real hand for meaning. One B-roll shot maximum.</td>
+          </tr>
+          <tr>
+            <td>Anchor picker</td>
+            <td class="num">anchorPicker.ts</td>
+            <td><span class="tag hide">Hide</span></td>
+            <td>Author tooling. Already URL-gated behind <code>?anchors</code>. Leave it there.</td>
+          </tr>
+          <tr>
+            <td>Clinical content accuracy caveat</td>
+            <td class="num">cases.ts header</td>
+            <td><span class="tag cut">Address</span></td>
+            <td>Cases 1&amp;2 vignettes were authored against reference anatomy, not the loaded scans. See Ethics.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <span class="note-label">Do not touch tomorrow</span>
+      <p>No refactors, no new render features, no "quick" visual polish on the catheter view. Every hour spent there is an hour not spent on the 45% of the rubric you currently score zero on.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The study layer — architecture</h2>
+    <p class="lede">The only new code. Designed to be purely additive: it reads the existing store and writes its own, so a bug here cannot break the demo.</p>
+
+    <h3>Design constraints</h3>
+    <ul>
+      <li><strong>Zero edits to <code>engine.ts</code> or <code>store.ts</code>.</strong> Both are working and demo-critical. The study layer only reads <code>ProgressStore.attempts</code>, which is already a public getter.</li>
+      <li><strong>URL-gated</strong>, following the precedent already in <code>surgilearn/index.ts</code> where the anchor picker checks <code>?anchors</code>. Study mode activates on <code>?study</code> and is invisible otherwise — so the video demo and the research instrument never collide.</li>
+      <li><strong>No server, no account.</strong> Data stays in localStorage until the researcher exports it. This is not a shortcut; it is the same zero-footprint claim the platform is built on, and it means running the study needs no IT approval.</li>
+      <li><strong>Export early, export often.</strong> localStorage is one cleared cache away from losing your entire dataset.</li>
+    </ul>
+
+    <h3>Module map</h3>
+    <pre><code>src/study/
+  types.ts        <span class="cmt">— StudySession, QuizResult, phase union</span>
+  items.ts        <span class="cmt">— quiz bank (forms A/B) + SUS statements</span>
+  studyStore.ts   <span class="cmt">— persistence, SUS scoring, CSV/JSON export</span>
+  studyPanel.ts   <span class="cmt">— the wizard UI (consent → pre → practice → post → SUS)</span>
+  study.css
+
+<span class="cmt">One hook in main.ts, nothing more:</span>
+  if (new URLSearchParams(location.search).has('study')) {
+    new StudyMode(app, store, surgilearn);
+  }</code></pre>
+
+    <h3>Data model</h3>
+    <pre><code>export type Phase = 'consent' | 'pre' | 'practice' | 'post' | 'sus' | 'done';
+
+export interface QuizResponse {
+  itemId: string;
+  chosen: string;
+  correct: boolean;
+  elapsedMs: number;
+}
+
+export interface QuizResult {
+  form: 'A' | 'B';
+  responses: QuizResponse[];
+  score: number;            <span class="cmt">// 0..5</span>
+  startedAt: number;
+  completedAt: number;
+}
+
+export interface StudySession {
+  participantId: string;    <span class="cmt">// "P01" — never a name. Ethics + anonymity.</span>
+  cohort: string;           <span class="cmt">// "BME Year 3"</span>
+  device: string;           <span class="cmt">// "Dell Inspiron / integrated 720p webcam"</span>
+  startedAt: number;
+
+  pre?: QuizResult;
+  confidencePre?: number;   <span class="cmt">// 1..5 Likert</span>
+
+  practice: {
+    fromAttemptIndex: number;   <span class="cmt">// snapshot of store.attempts.length at start</span>
+    attempts: Attempt[];        <span class="cmt">// sliced out at practice end</span>
+    durationMs: number;
+  };
+
+  post?: QuizResult;
+  confidencePost?: number;
+  sus?: number[];           <span class="cmt">// 10 responses, each 1..5</span>
+  susScore?: number;        <span class="cmt">// computed 0..100</span>
+
+  notes: string;            <span class="cmt">// observer notes — "webcam struggled in backlight"</span>
+  completedAt?: number;
+}</code></pre>
+
+    <h3>The seam to the existing store</h3>
+    <p>This is the entire integration surface. Two lines, both read-only:</p>
+    <pre><code><span class="cmt">// At practice start — remember where this participant's attempts begin.</span>
+session.practice.fromAttemptIndex = store.attempts.length;
+
+<span class="cmt">// At practice end — everything recorded in between belongs to them.</span>
+session.practice.attempts = store.attempts.slice(session.practice.fromAttemptIndex);</code></pre>
+    <p>Because <code>ProgressStore.record()</code> is the single funnel every completed case passes through, this slice is guaranteed complete without subscribing to anything. Do <em>not</em> call <code>store.reset()</code> between participants — it destroys history and the index arithmetic with it. Let attempts accumulate; the slice keeps them separated.</p>
+
+    <h3>Wizard state machine</h3>
+    <pre><code>consent  ──▶ pre ──▶ practice ──▶ post ──▶ sus ──▶ done
+   │                    │                            │
+   │                    │ (app runs normally,        │ export CSV + JSON
+   │                    │  panel collapses to        │ then "New participant"
+   │                    │  a timer + END button)     │
+   └── participant ID, cohort, device captured here</code></pre>
+    <p>During <code>practice</code> the study panel must get out of the way — collapse to a small floating timer with one END PRACTICE button. The participant is using the real app, unmodified, and anything else on screen contaminates both the experience and the SUS score they give you afterwards.</p>
+
+    <h3>Export format</h3>
+    <p>One CSV row per participant, plus a full JSON dump for anything the CSV flattens away. Trigger both with a single button via <code>Blob</code> + a temporary anchor — no library, no server.</p>
+    <pre><code>participant, cohort, device, pre_score, post_score, gain,
+conf_pre, conf_post, sus_score, cases_completed, mean_case_score,
+mean_case_time_s, off_target_ids, practice_duration_s, notes</code></pre>
+
+    <h4>SUS scoring — get this right, it is easy to fumble</h4>
+    <pre><code>Odd-numbered items (1,3,5,7,9):  contribution = response − 1
+Even-numbered items (2,4,6,8,10): contribution = 5 − response
+susScore = sum(contributions) × 2.5     <span class="cmt">// → 0..100</span></code></pre>
+    <p>68 is the published average across systems; above 68 is above average, above 80 is the "excellent" band. Put the 68 line on your chart — it is what makes the number legible to a judge who does not know the scale.</p>
+  </section>
+
+  <section>
+    <h2>Instruments</h2>
+    <p class="lede">Every quiz item is taught by content already in <code>cases.ts</code> — the <code>REGION_INFO</code> blurbs and the per-case <code>teaching</code> strings. That tight coupling between what the tool teaches and what the test measures is your construct-validity argument; say it out loud on the slide.</p>
+
+    <h3>Knowledge probe — 5 items, forms A and B</h3>
+    <ol>
+      <li>Which artery runs the anterior interventricular groove to the apex? <em>→ LAD</em></li>
+      <li>A proximal occlusion of which vessel is termed the "widow-maker"? <em>→ LAD</em></li>
+      <li>Which vessel gives off obtuse marginal branches to the lateral wall? <em>→ LCX</em></li>
+      <li>A 40% luminal stenosis is managed with: <em>→ medical therapy, not revascularisation</em></li>
+      <li>An RCA arising from the left coronary sinus with an interarterial course risks: <em>→ compression between aorta and pulmonary trunk on exertion</em></li>
+    </ol>
+    <p>Form B is the same five items with option order shuffled and item order reversed. This controls for position memory but not for item familiarity — state that limitation rather than letting a judge find it.</p>
+
+    <h4>Also captured, one line each</h4>
+    <ul>
+      <li><strong>Confidence</strong>, 1–5: "How confident are you identifying the coronary arteries on a CT angiogram?" Asked before and after.</li>
+      <li><strong>SUS</strong>, the standard 10 statements, 1–5. Do not rewrite them — the benchmark only holds for the validated wording.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Protocol — per participant, ~22 minutes</h2>
+
+    <div class="phase">
+      <div class="phase-time">2 min</div>
+      <div class="phase-body">
+        <h4>Setup &amp; consent</h4>
+        <p>Assign the next ID (P01, P02…). Read the one-paragraph consent aloud: what you're collecting, that it's anonymous, that they can stop. Record device and webcam type — variation here is <em>data</em>, not noise. It is direct evidence the thing runs on ordinary hardware.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-time">4 min</div>
+      <div class="phase-body">
+        <h4>Pre-test</h4>
+        <p>Form A + confidence rating. <strong>No feedback, no scores shown.</strong> If they see which ones they missed, the post-test measures memory of the answer key rather than learning from the tool.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-time">10 min</div>
+      <div class="phase-body">
+        <h4>Practice — the intervention</h4>
+        <p>CHALLENGE mode, Cases 1 → 2 → 3, hands only. You sit back and say nothing beyond fixing outright technical faults. Every word of coaching you give is a confound you will have to disclose. Note observations in the notes field instead of speaking.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-time">5 min</div>
+      <div class="phase-body">
+        <h4>Post-test + SUS</h4>
+        <p>Form B, confidence again, then the 10 SUS statements. Export immediately — do not queue up three participants before the first export.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-time">1 min</div>
+      <div class="phase-body">
+        <h4>Reset for next</h4>
+        <p>"New participant" clears the session but <em>not</em> the attempt history. Re-verify the export file grew.</p>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="note-label">Throughput</span>
+      <p>Two laptops running in parallel gets you 8 participants in about 90 minutes of wall-clock time. Recruit from your own cohort — classmates who have covered cardiac anatomy but are not cath-lab experts are exactly the right population, and "second/third-year BME students" is a defensible, honestly-stated sample.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Analysis — three charts, each buying a specific criterion</h2>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Chart</th><th>Data</th><th>Buys</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Paired pre → post</strong><br>slope chart, one line per participant + bold mean</td>
+            <td class="num">pre_score, post_score</td>
+            <td>Simulation Effectiveness 25%<br>Educational Impact 20%</td>
+          </tr>
+          <tr>
+            <td><strong>SUS with 68 benchmark line</strong><br>single bar or dot plot</td>
+            <td class="num">sus_score</td>
+            <td>UI/UX &amp; Engagement 15%</td>
+          </tr>
+          <tr>
+            <td><strong>Confidence shift</strong><br>diverging pre/post bars</td>
+            <td class="num">conf_pre, conf_post</td>
+            <td>Educational Impact 20%</td>
+          </tr>
+          <tr>
+            <td><em>Supporting:</em> in-app telemetry — case score, time, off-target IDs across Cases 1→3</td>
+            <td class="num">practice.attempts</td>
+            <td>Shows learning <em>within</em> the session, free from the engine you already built</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note risk">
+      <span class="note-label">Report honestly</span>
+      <p>With n≈8 and no control group this is a <strong>pilot</strong>, and calling it one costs you nothing — the 2025 winner reported n=9. Say "pilot study, n=8, single-arm pre/post, no control" on the slide. A judge who spots an overclaim discounts everything else you said; a judge who sees a clean limitation statement trusts the rest.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Video architecture — 6:00 target</h2>
+    <p class="lede">Shot list, in order, with what each earns. Record in this sequence so the edit is assembly rather than rescue.</p>
+
+    <div class="shot">
+      <div class="shot-tc">0:00–0:35</div>
+      <div><b>The problem, on a black card</b><span>Nairobi: enrollment grew past 400/year, cadaver supply stayed at 50. Ratio went 1:6 → 1:9. The proposed fix is VR. VR needs headsets these institutions cannot import.</span><br><span class="rubric">Sets up Accessibility 10%</span></div>
+    </div>
+
+    <div class="shot">
+      <div class="shot-tc">0:35–1:05</div>
+      <div><b>Cold open — unbroken take</b><span>Wide shot: you, an ordinary laptop, nothing else on the desk. Hand rises. The heart moves. No cuts, no edit, no hardware anywhere in frame. This single shot is the entire argument.</span><br><span class="rubric">Creativity 20%</span></div>
+    </div>
+
+    <div class="shot">
+      <div class="shot-tc">1:05–2:00</div>
+      <div><b>EXPLORE — real patient anatomy</b><span>Load a coronary CTA case. Rotate it by hand. Dive the camera inside. Name the provenance out loud: patient-derived segmentation, not an artist's model.</span><br><span class="rubric">Simulation Effectiveness 25%</span></div>
+    </div>
+
+    <div class="shot">
+      <div class="shot-tc">2:00–3:20</div>
+      <div><b>CHALLENGE — the learning loop</b><span>Mission brief → rotate to the LAO working view → dwell-identify the LAD → locate the stenosis → grade it → AI debrief reads back the teaching point. This is the section that proves it teaches rather than displays.</span><br><span class="rubric">Educational Impact 20% · AI 10%</span></div>
+    </div>
+
+    <div class="shot">
+      <div class="shot-tc">3:20–3:55</div>
+      <div><b>Catheter navigation — the finale image</b><span>Split view. Overview left, inside the lumen right. Advance the wire, cross the stenosis. Thirty-five seconds, no explanation of the mechanics — let it look like what it is.</span><br><span class="rubric">Creativity 20% · UX 15%</span></div>
+    </div>
+
+    <div class="shot">
+      <div class="shot-tc">3:55–5:10</div>
+      <div><b>The evidence</b><span>The three charts, on screen, with the numbers spoken. "Pilot, n=8." Pre → post. SUS against the 68 line. This is the segment that separates you from a tech demo.</span><br><span class="rubric">Effectiveness 25% · Impact 20% · UX 15%</span></div>
+    </div>
+
+    <div class="shot">
+      <div class="shot-tc">5:10–5:45</div>
+      <div><b>The access thesis, made concrete</b><span>Cost line: Meta Quest 3 per seat vs. $0 on hardware already owned. Runs offline after first load. No account, no data leaves the machine — so no IT procurement and no ethics queue to deploy it in a teaching lab.</span><br><span class="rubric">Sustainability / Accessibility / Ethics 10%</span></div>
+    </div>
+
+    <div class="shot">
+      <div class="shot-tc">5:45–6:00</div>
+      <div><b>Close</b><span>Return to the wide shot. One line: the schools with the worst ratios should not be the ones who can least afford the fix.</span></div>
+    </div>
+
+    <div class="note warn">
+      <span class="note-label">Production notes</span>
+      <p>Record audio separately and lay it under the screen capture — laptop-mic narration over fan noise reads as unfinished. Light yourself from the front; the same webcam that tracks your hand is unforgiving in backlight, and a tracking dropout on camera is the one failure the video cannot survive. Do a full dry run before the real take.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Five slides</h2>
+    <ol>
+      <li><strong>The gap.</strong> Cadaver ratios worsening; the accepted fix requires hardware the affected institutions can't buy. One statistic, one sentence.</li>
+      <li><strong>The system.</strong> Architecture diagram: webcam → MediaPipe 21-landmark tracking → gesture layer → WebGL specimen → challenge engine. Label it "browser only, no install, no headset."</li>
+      <li><strong>Learning design.</strong> The case → identify → grade → AI debrief loop, and the point that the assessment items map directly onto the taught content.</li>
+      <li><strong>Evidence.</strong> The three charts. Method line underneath: pilot, n=8, single-arm pre/post, no control.</li>
+      <li><strong>Access &amp; ethics.</strong> Cost per seat, offline capability, on-device data, and the honest limitation list.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Ethics &amp; honesty register</h2>
+    <p class="lede">Two of these are unresolved in the repo right now. Both are cheap to state and expensive to be caught on.</p>
+    <ul>
+      <li><strong>Clinical content caveat.</strong> <code>cases.ts</code> carries a header warning that Cases 1 and 2 load patient-derived scans while their vignettes and answer keys were authored against reference anatomy. Either correct them tomorrow morning or state on the slide that the anatomy is patient-derived while the teaching vignettes are instructor-authored. Do not let this sit silently.</li>
+      <li><strong>Depth is stylised.</strong> A single webcam gives relative depth, not metric depth. Your own code comments already say this. Saying it in the video reads as rigour, not weakness.</li>
+      <li><strong>Anonymity.</strong> Participant IDs only, no names, nothing leaves the device until you export it.</li>
+      <li><strong>Not a validated assessment.</strong> The score is a teaching signal, not a certification instrument. Say so.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Risk register</h2>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Risk</th><th>Trigger</th><th>Response</th></tr></thead>
+        <tbody>
+          <tr><td>Too few participants</td><td>&lt;5 by 3pm</td><td>Ship with n=5 and label it a pilot. Five paired points still beat zero.</td></tr>
+          <tr><td>Data loss</td><td>Cleared cache / private window</td><td>Export after <em>every</em> participant. Keep the CSVs in a folder outside the repo.</td></tr>
+          <tr><td>Webcam fails on a participant's laptop</td><td>Poor lighting, low-end sensor</td><td>Two known-good machines pre-tested. Record the device field either way — a failure is a real finding.</td></tr>
+          <tr><td>AI debrief key missing on demo day</td><td><code>config.js</code> absent</td><td>It falls back to the offline teaching text by design. Verify which path you're demoing before recording.</td></tr>
+          <tr><td>Study build overruns</td><td>Not done by 12:00</td><td>Drop the in-app wizard; run pre/post on paper and type results into the CSV by hand. The <em>data</em> is what scores, not the instrument's polish.</td></tr>
+          <tr><td>Video overruns 7:00</td><td>Edit runs long</td><td>Cut from the catheter finale first, then EXPLORE. Never cut the evidence segment.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Build day — 14 August</h2>
+
+    <div class="phase">
+      <div class="phase-time">09:00</div>
+      <div class="phase-body">
+        <h4>Study layer, timeboxed to three hours</h4>
+        <p>Five files under <code>src/study/</code>. If it is not working by 12:00, invoke the paper fallback and move on. This deadline is real — protect the afternoon.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-time">12:00</div>
+      <div class="phase-body">
+        <h4>Pilot on yourself, then fix the content caveat</h4>
+        <p>Run one full session end to end, confirm the CSV, then resolve the <code>cases.ts</code> clinical warning one way or the other.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-time">13:30</div>
+      <div class="phase-body">
+        <h4>Participants</h4>
+        <p>Two laptops in parallel, target 8. This is the single most valuable block of the day — do not let anything displace it.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-time">15:30</div>
+      <div class="phase-body">
+        <h4>Analysis and charts</h4>
+        <p>Three charts. Keep them plain and readable at video resolution — no 3D, no gradients, axis labels large enough to survive compression.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-time">17:00</div>
+      <div class="phase-body">
+        <h4>Slides, then script, then dry run</h4>
+        <p>Write the narration as a script and read it — improvised narration is what pushes a 6-minute video to nine.</p>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-time">19:30</div>
+      <div class="phase-body">
+        <h4>Record and cut</h4>
+        <p>Shot list order. Leave 15 August entirely as buffer and submission — not as production time.</p>
+      </div>
+    </div>
+  </section>
+
+</div>

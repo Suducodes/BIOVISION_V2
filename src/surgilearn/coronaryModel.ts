@@ -187,12 +187,7 @@ function curveOf(path: Pt[]): THREE.CatmullRomCurve3 {
  * Standalone, navigable vessel for the catheter-navigation challenge: same
  * centreline and geometrically-narrowed lumen the main tree renders, but
  * built and returned in isolation so the challenge can put it on its own
- * render layer. That matters because the loaded specimen is sometimes a
- * patient CTA scan whose own mesh has no per-vessel lumen labelling (see
- * anchors.ts) — this reference geometry is what stays "actually accurate to
- * the model" (real epicardial course, real geometric stenosis) in every
- * case, real scan or procedural, since it's authored the same normalised
- * pivot frame every specimen is fitted into on load.
+ * render layer.
  */
 export interface NavVessel {
   region: 'LAD' | 'LCX' | 'RCA';
@@ -202,19 +197,50 @@ export interface NavVessel {
   stenosisMesh?: THREE.Mesh;
 }
 
-export function buildNavVessel(def: CoronaryCase, region: 'LAD' | 'LCX' | 'RCA'): NavVessel {
-  const curve = curveOf(pathFor(def, region));
+/**
+ * The transform `normaliseTree` applies to a *loaded* specimen's root — see
+ * that function below. LAD_PATH/LCX_PATH/etc. are authored coordinates in
+ * the tree's own local space, not the normalised pivot-local space every
+ * displayed specimen actually sits in; the two only coincide when this
+ * transform happens to be near-identity, which it usually isn't (the
+ * bounding box driving it includes the aortic root stub and myocardial
+ * ghost, not just the vessel paths). Passing the loaded specimen's actual
+ * position/scale here is what keeps the nav vessel sitting exactly where
+ * the real, displayed vessel does, rather than a fixed offset away from it.
+ */
+export interface NavTransform {
+  position: THREE.Vector3;
+  scale: number;
+}
+
+function transformPath(path: Pt[], t?: NavTransform): Pt[] {
+  if (!t) return path;
+  return path.map(([x, y, z]) => [
+    t.position.x + x * t.scale,
+    t.position.y + y * t.scale,
+    t.position.z + z * t.scale,
+  ]);
+}
+
+export function buildNavVessel(
+  def: CoronaryCase,
+  region: 'LAD' | 'LCX' | 'RCA',
+  transform?: NavTransform,
+): NavVessel {
+  const curve = curveOf(transformPath(pathFor(def, region), transform));
   const lesion =
     def.lesion && def.lesion.vessel === region
       ? { at: def.lesion.at, severity: def.lesion.severity, halfWidth: LESION_HALF_WIDTH }
       : undefined;
-  const radiusAt = radiusProfile(PROXIMAL_RADIUS[region], lesion);
+  const scale = transform?.scale ?? 1;
+  const rawRadiusAt = radiusProfile(PROXIMAL_RADIUS[region], lesion);
+  const radiusAt = (t: number) => rawRadiusAt(t) * scale;
   const mesh = new THREE.Mesh(variableTube(curve, radiusAt, 128, 16), vesselMaterial());
 
   let stenosisMesh: THREE.Mesh | undefined;
   if (lesion && def.lesion) {
     stenosisMesh = new THREE.Mesh(
-      stenosisSleeve(curve, def.lesion),
+      stenosisSleeve(curve, def.lesion, 0.075 * scale),
       new THREE.MeshStandardMaterial({
         color: 0xff7a2f,
         emissive: 0xff5a1f,
@@ -332,7 +358,7 @@ function pathFor(def: CoronaryCase, region: 'LAD' | 'LCX' | 'RCA'): Pt[] {
 }
 
 /** The stenosis proxy is a short sleeve wrapped around the narrowed segment. */
-function stenosisSleeve(curve: THREE.CatmullRomCurve3, lesion: Lesion): THREE.BufferGeometry {
+function stenosisSleeve(curve: THREE.CatmullRomCurve3, lesion: Lesion, radius = 0.075): THREE.BufferGeometry {
   const from = Math.max(0, lesion.at - LESION_HALF_WIDTH * 1.6);
   const to = Math.min(1, lesion.at + LESION_HALF_WIDTH * 1.6);
   const pts: THREE.Vector3[] = [];
@@ -341,7 +367,7 @@ function stenosisSleeve(curve: THREE.CatmullRomCurve3, lesion: Lesion): THREE.Bu
     pts.push(curve.getPointAt(from + ((to - from) * i) / steps));
   }
   const sleeve = new THREE.CatmullRomCurve3(pts);
-  return variableTube(sleeve, () => 0.075, 24, 12);
+  return variableTube(sleeve, () => radius, 24, 12);
 }
 
 /**

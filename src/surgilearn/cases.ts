@@ -109,15 +109,20 @@ export interface CoronaryCase {
 }
 
 /**
- * ⚠️ CLINICAL CONTENT NEEDS A READ.
- *
- * Cases 1 and 2 now load patient-derived CTA segmentations (case_182 and
- * case_193). The vignettes, lesion positions and answer keys below were
- * authored against the procedural reference anatomy — they are NOT derived
- * from those scans. Before this is put in front of a student, someone who can
- * read the studies has to confirm what each one actually shows and correct
- * `brief`, `answer`, `lesion` and `teaching` to match. Case 3 remains fully
- * procedural, so its content is internally consistent.
+ * All three cases are procedural, deliberately. Two real patient CTA scans
+ * (case_182, case_193) were trialled for Cases 1 and 2 — see
+ * public/models/coronary/_real-scans-unused — but a real scan has no
+ * per-vessel lumen labelling of its own, so identification and grading had
+ * to be scored against this same reference anatomy overlaid as a guess (see
+ * regions.ts's `unmapped` handling and the "hover targets are reference
+ * anatomy" notice this used to show). That is an honest thing to ship, but
+ * it is a weaker claim than "the case matches the content", so for now every
+ * case is generated from these centrelines directly: the vignette, the
+ * lesion, and the geometry the student actually sees are the same source of
+ * truth, exactly as Case 3 always was. Swapping a real scan back in for a
+ * specific case is a `file`-pointing exercise (see specimenLoader.ts) once
+ * someone who can read the study has confirmed what it shows and updated
+ * `brief`/`answer`/`lesion`/`teaching` to match it.
  */
 
 // Angiographic working views. Positive yaw swings the specimen's left side
@@ -133,7 +138,7 @@ export const CASES: CoronaryCase[] = [
     glyph: '◍',
     file: 'case1.glb',
     logTitle: 'CORONARY CASE 1 — BASELINE',
-    source: 'Coronary CTA segmentation · case_182 (LCA + RCA)',
+    source: 'Coronary CTA reconstruction · normal anatomical baseline',
     title: 'CASE 1 · NORMAL ANATOMY',
     brief:
       '58F, atypical chest pain, low-risk stress test. CTA ordered for an anatomical baseline. Confirm a normal left system and grade any disease.',
@@ -153,7 +158,7 @@ export const CASES: CoronaryCase[] = [
     glyph: '◍',
     file: 'case2.glb',
     logTitle: 'CORONARY CASE 2 — MILD DISEASE',
-    source: 'Coronary CTA segmentation · case_193 (LCA + RCA)',
+    source: 'Coronary CTA reconstruction · mid-LAD stenosis',
     title: 'CASE 2 · MILD STENOSIS',
     brief:
       '65M, chest pain on exertion, referred to the cath lab. Identify the culprit vessel, find the lesion and grade it.',
