@@ -682,14 +682,44 @@ body.catheter-focus #top-bar:hover {
 }
 
 /* Bigger camera feed: this is the operator's hand-eye reference while
-   steering, so it stops being a thumbnail and becomes an instrument. */
+   steering, so it stops being a thumbnail and becomes an instrument.
+
+   Moved to the LEFT half for the duration. Its normal home is bottom-right,
+   which is precisely where the lumen pane renders — the one view the
+   operator is actually steering by. The left half shows the external
+   overview, which is contextual ("where am I in the vessel") rather than
+   something you fly by, so covering a corner of it costs far less. */
 body.catheter-focus #tracker-panel {
   width: 400px;
+  right: auto;
+  left: 30px;
 }
 
 @media (max-height: 800px) {
   body.catheter-focus #tracker-panel {
     width: 340px;
+  }
+}
+
+/* Same reasoning for the readout panel: centred, it straddles the divider
+   and eats a quarter of the lumen pane. Pinned to the left half above the
+   camera feed for the duration, so the entire right half stays clear.
+   (Higher specificity than the max-width:900px rule that would otherwise
+   stretch it edge to edge, so it holds at every width.) */
+body.catheter-focus #trace-panel {
+  left: 30px;
+  right: auto;
+  top: 130px;
+  bottom: auto;
+  width: 400px;
+  max-height: none;
+  transform: none;
+}
+
+@media (max-height: 800px) {
+  body.catheter-focus #trace-panel {
+    width: 340px;
+    top: 118px;
   }
 }
 
