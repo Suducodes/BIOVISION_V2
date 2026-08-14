@@ -82,15 +82,33 @@ const DEFLECT_REACH = 1.25;
 
 const LOOKAHEAD_T = 0.035;
 
-const JERK_ANGLE_DEG = 26;
-const JERK_BUDGET = 10;
+// Smoothness scoring — see trackJerk(). Steering below JERK_DEADZONE is too
+// near the centreline for its direction to mean anything, so it isn't
+// measured at all. Above that, only direction changes faster than
+// JERK_RATE_DEG_PER_S count against you, integrated over real seconds.
+const JERK_DEADZONE = 0.18;
+const JERK_RATE_DEG_PER_S = 260;
+// Wide enough that a merely-unsteady run lands mid-scale rather than at
+// zero: a learner who can only ever score 0 has nothing to improve against,
+// and the whole point of the metric is to show a curve over repeated
+// attempts. Only genuinely violent tremor should bottom it out.
+const JERK_BUDGET = 16;
 
 const PAR_SECONDS = 20;
 const COMPLETION_DWELL_MS = 500;
 // How far past the lesion counts as "crossed it" — the real clinical action
 // is crossing the stenosis, not merely reaching its centre.
+// How far past the lesion counts as having crossed it. This is a scored
+// milestone *during* the run, not the finish line — an earlier version ended
+// the run here, which meant Case 2 finished at 50% progress and Case 3 at
+// 38%, reading as "the results appeared before I got anywhere". Crossing the
+// stenosis is the hard part, but the wire still has to be delivered distal
+// to it, which is both what an operator actually does and what makes the
+// progress bar mean what it looks like it means.
 const LESION_CROSS_MARGIN = 0.08;
-const NO_LESION_COMPLETION_T = 0.94;
+
+/** The finish line, for every case: the wire is delivered to the distal vessel. */
+const COMPLETION_T = 0.94;
 
 const CYAN = new THREE.Color(0x34e3ff);
 const RED = new THREE.Color(0xff5a5a);
@@ -114,7 +132,9 @@ export class CatheterNav {
   private readonly guideMaterial: THREE.ShaderMaterial;
 
   private vessel: NavVessel | undefined;
-  private completionT = NO_LESION_COMPLETION_T;
+  /** Where along the curve the stenosis sits, or null on a clean vessel. */
+  private lesionT: number | null = null;
+  private lesionCrossed = false;
   private missionLabel = 'LAD';
 
   private running = false;
@@ -228,9 +248,8 @@ export class CatheterNav {
       this.rig.add(this.vessel.stenosisMesh);
     }
 
-    this.completionT = def.lesion
-      ? Math.min(0.98, def.lesion.at + LESION_CROSS_MARGIN)
-      : NO_LESION_COMPLETION_T;
+    this.lesionT = def.lesion ? def.lesion.at : null;
+    this.lesionCrossed = false;
     this.missionLabel = region;
 
     this.guideMesh.geometry.dispose();
@@ -273,6 +292,17 @@ export class CatheterNav {
     return this.wallContactEvents;
   }
 
+  /** Position of the stenosis along the run, 0..1, or null on a clean vessel —
+   *  so the progress rail can mark where the hard part is. */
+  get lesionAt(): number | null {
+    return this.lesionT;
+  }
+
+  /** True once the wire has been advanced clear of the stenosis. */
+  get hasCrossedLesion(): boolean {
+    return this.lesionCrossed;
+  }
+
   start(): void {
     if (!this.vessel) return;
     this.running = true;
@@ -287,6 +317,7 @@ export class CatheterNav {
     this.wallContactEvents = 0;
     this.hasLastSteer = false;
     this.dwellMs = 0;
+    this.lesionCrossed = false;
     this.lastResult = null;
     this.rig.visible = true;
     this.marker.visible = true;
@@ -325,6 +356,16 @@ export class CatheterNav {
       this.steerN = damp(this.steerN, targetN, STEER_SMOOTH_MS, deltaMs);
       this.steerB = damp(this.steerB, targetB, STEER_SMOOTH_MS, deltaMs);
       this.elapsedMs += deltaMs;
+
+      // Smoothness is scored on the *raw* requested steering, not the damped
+      // result. The damping exists to make the wire controllable, and it's
+      // very good at its job — a violent hand tremor is almost entirely
+      // filtered out before it reaches steerN/steerB, so measuring those
+      // scored a shaking hand 100/100. What the instrument is supposed to
+      // grade is the operator's hand, so it has to read the signal upstream
+      // of the filter that's hiding the problem.
+      this.scratchSteer.set(targetN, targetB);
+      this.trackJerk(this.scratchSteer, deltaMs);
     }
 
     // Cardiac cycle, same 72 BPM lub-dub the specimen pulses on — drives the
@@ -385,11 +426,15 @@ export class CatheterNav {
     this.accuracySum += accuracy;
     this.accuracySamples++;
 
-    this.scratchSteer.set(this.steerN, this.steerB);
-    this.trackJerk(this.scratchSteer);
 
-    const crossedLesion = this.t >= this.completionT;
-    if (crossedLesion && !this.wallContact) {
+    // Crossing the stenosis is a milestone recorded on the way past, not the
+    // finish line — the run ends when the wire is delivered to the distal
+    // vessel, the same for every case.
+    if (this.lesionT !== null && !this.lesionCrossed && this.t >= this.lesionT + LESION_CROSS_MARGIN) {
+      this.lesionCrossed = true;
+    }
+
+    if (this.t >= COMPLETION_T && !this.wallContact) {
       this.dwellMs += deltaMs;
       if (this.dwellMs >= COMPLETION_DWELL_MS) return this.finish();
     } else {
@@ -423,12 +468,40 @@ export class CatheterNav {
     return safe > 0 ? clamp01(1 - mag / safe) : 1;
   }
 
-  private trackJerk(steer: THREE.Vector2): void {
-    if (steer.length() < 0.08) return;
-    if (this.hasLastSteer) {
-      const dot = clamp(steer.dot(this.lastSteer) / (steer.length() * this.lastSteer.length() || 1), -1, 1);
+  /**
+   * Smoothness penalty: sustained rapid changes in steering *direction*.
+   *
+   * Two bugs this had to be rewritten around, both of which made an ordinary
+   * human run score 0/100:
+   *
+   *  - Only the current steer vector was deadzone-checked, not the previous
+   *    one. Steering naturally passes through near-zero every time it crosses
+   *    the vessel centreline, and at that magnitude the vector's *direction*
+   *    is dominated by noise — so a perfectly smooth pass through centre
+   *    registered as a ~180° direction reversal and a huge jerk spike.
+   *  - Accumulation was per-frame rather than per-second, so the same physical
+   *    motion scored twice as harshly at 60fps as at 30fps.
+   *
+   * Now both vectors must represent real deflection, and the penalty is an
+   * angular *rate* integrated over real time — framerate-independent, and
+   * blind to centreline crossings.
+   */
+  private trackJerk(steer: THREE.Vector2, deltaMs: number): void {
+    const len = steer.length();
+    const lastLen = this.lastSteer.length();
+    if (len < JERK_DEADZONE) {
+      // Too close to centre for direction to be meaningful — don't measure,
+      // and don't leave a stale reference that would spike on the way out.
+      this.hasLastSteer = false;
+      return;
+    }
+    if (this.hasLastSteer && lastLen >= JERK_DEADZONE && deltaMs > 0) {
+      const dot = clamp(steer.dot(this.lastSteer) / (len * lastLen), -1, 1);
       const angleDeg = THREE.MathUtils.radToDeg(Math.acos(dot));
-      if (angleDeg > JERK_ANGLE_DEG) this.jerkTotal += (angleDeg - JERK_ANGLE_DEG) / 40;
+      const rate = angleDeg / (deltaMs / 1000);
+      if (rate > JERK_RATE_DEG_PER_S) {
+        this.jerkTotal += ((rate - JERK_RATE_DEG_PER_S) / 1000) * (deltaMs / 1000);
+      }
     }
     this.lastSteer.copy(steer);
     this.hasLastSteer = true;

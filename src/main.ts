@@ -375,6 +375,7 @@ async function boot(): Promise<void> {
       } else if (catheterOn) {
         catheterPanel!.renderLive(catheterNav!.liveProgressPct, catheterNav!.liveWallContacts, catheterNav!.liveElapsedMs);
         catheterOverlay.show();
+        catheterOverlay.setLesionMarker(catheterNav!.lesionAt);
         catheterOverlay.update(catheterNav!.liveProgressPct, catheterNav!.liveWallContact);
         // Cue goes quiet once the hand is actually inside the band the
         // advance/steer axes read from — same constants as catheterNav.

@@ -51,11 +51,20 @@ function frameCapture(): Plugin {
   };
 }
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, isPreview }) => ({
   // Served at the repo subpath on GitHub Pages, but at root in dev so the
   // local URL stays simple. All runtime asset paths read import.meta.env.BASE_URL
   // so they resolve correctly under either.
-  base: command === 'build' ? '/BIOVISION_V2/' : '/',
+  //
+  // `isPreview` matters and is easy to miss: `command` is 'serve' for BOTH
+  // dev and `vite preview`, so keying only on it mounted the production
+  // build at '/' while its own HTML referenced '/BIOVISION_V2/'. Every asset
+  // then fell through to the SPA fallback and came back as index.html with
+  // Content-Type: text/html — which surfaces as the confusing "failed to
+  // fetch dynamically imported module" (the request 200s, it's just HTML,
+  // not a module). Real GitHub Pages deploys were always fine; it was
+  // local preview of the real build that was impossible.
+  base: command === 'build' || isPreview ? '/BIOVISION_V2/' : '/',
   plugins: [frameCapture()],
   server: {
     // getUserMedia requires a secure context. localhost counts as secure,

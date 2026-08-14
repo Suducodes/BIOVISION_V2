@@ -864,6 +864,19 @@ body.catheter-focus #trace-panel {
   transition: width 0.15s linear;
 }
 
+/* Where the stenosis sits along the run — the rail now shows both distance
+   remaining and where the difficult segment is. */
+.cath-rail-lesion {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 10px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--amber);
+  box-shadow: 0 0 6px rgba(255, 206, 106, 0.9);
+}
+
 .cath-wall-flash {
   position: absolute;
   top: 0;
