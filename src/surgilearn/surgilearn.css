@@ -573,6 +573,12 @@
   display: grid;
   gap: 10px;
   text-align: center;
+  animation: cath-reveal 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes cath-reveal {
+  from { opacity: 0; transform: scale(0.94) translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
 
 .trace-score-label {
@@ -582,12 +588,46 @@
   color: var(--text-dim);
 }
 
+.trace-score-label::before {
+  content: '◈ ';
+  color: var(--cyan);
+}
+
+/* The score sits inside a ring built from a conic-gradient sweep — the
+   "circular gauge" read of an AI diagnostic readout, not just a number
+   dropped on the page. A radial glow behind it sells the same idea from a
+   distance, when the exact digits aren't what a viewer is reading yet. */
 .trace-score-value {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 118px;
+  height: 118px;
+  margin: 6px auto 2px;
   font-family: var(--mono);
-  font-size: 44px;
+  font-size: 40px;
   font-weight: 700;
   line-height: 1;
   color: var(--teal);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, rgba(56, 224, 143, 0.16), transparent 68%),
+    conic-gradient(var(--teal) calc(var(--pct, 100) * 1%), rgba(70, 200, 255, 0.12) 0);
+  -webkit-mask: radial-gradient(circle, transparent 63%, #000 64%);
+  mask: radial-gradient(circle, transparent 63%, #000 64%);
+}
+
+/* The mask above cuts the ring's own text out of it (masks apply to the
+   whole element), so the number is drawn a second time, unmasked, on top. */
+.trace-score-value::after {
+  content: attr(data-score);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  -webkit-mask: none;
+  mask: none;
+  color: inherit;
 }
 
 .trace-score-value.novice { color: var(--text-dim); }
@@ -603,15 +643,16 @@
 
 .trace-score-row {
   display: grid;
-  grid-template-columns: 84px 1fr 28px;
+  grid-template-columns: 70px 1fr 26px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--text-dim);
 }
 
 .trace-score-meter {
+  position: relative;
   height: 6px;
   border-radius: 3px;
   background: rgba(70, 200, 255, 0.12);
@@ -624,7 +665,30 @@
   width: 0%;
   border-radius: 3px;
   background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
-  transition: width 0.5s ease;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* A live-feeling shimmer sweeping through each filled bar, like a readout
+   still actively confirming its own number rather than a static chart. */
+.trace-score-meter i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: cath-shimmer 2.2s ease-in-out infinite;
+}
+
+@keyframes cath-shimmer {
+  from { background-position: 140% 0; }
+  to { background-position: -40% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trace-scorecard { animation: none; }
+  .trace-score-meter i::after { animation: none; }
 }
 
 .trace-score-row b {
@@ -681,45 +745,44 @@ body.catheter-focus #top-bar:hover {
   opacity: 1;
 }
 
-/* Bigger camera feed: this is the operator's hand-eye reference while
-   steering, so it stops being a thumbnail and becomes an instrument.
+/* Both the camera feed and the readout panel used to pin to one whole side
+   (400px wide, full height) so as not to cover the OTHER pane — which meant
+   each one fully covered the pane it WAS on instead. Neither pane should
+   lose its whole face. Docked as a small cluster straddling the centre
+   divider at the bottom instead: each panel only eats a modest bite out of
+   its own pane's bottom-centre, and the artery/lumen stays visible above
+   both. The gesture-vocabulary rows are hidden here too — real estate is
+   tight, and once navigation is running the dedicated hand-placement cue
+   (over the video itself) is what actually matters, not the general
+   one-hand/two-hand legend. */
+body.catheter-focus #gesture-coach {
+  display: none !important;
+}
 
-   Moved to the LEFT half for the duration. Its normal home is bottom-right,
-   which is precisely where the lumen pane renders — the one view the
-   operator is actually steering by. The left half shows the external
-   overview, which is contextual ("where am I in the vessel") rather than
-   something you fly by, so covering a corner of it costs far less. */
 body.catheter-focus #tracker-panel {
-  width: 400px;
+  width: 230px;
   right: auto;
-  left: 30px;
+  left: calc(50% - 244px);
+  bottom: 24px;
 }
 
-@media (max-height: 800px) {
-  body.catheter-focus #tracker-panel {
-    width: 340px;
-  }
-}
-
-/* Same reasoning for the readout panel: centred, it straddles the divider
-   and eats a quarter of the lumen pane. Pinned to the left half above the
-   camera feed for the duration, so the entire right half stays clear.
-   (Higher specificity than the max-width:900px rule that would otherwise
-   stretch it edge to edge, so it holds at every width.) */
 body.catheter-focus #trace-panel {
-  left: 30px;
+  left: calc(50% + 14px);
   right: auto;
-  top: 130px;
-  bottom: auto;
-  width: 400px;
+  top: auto;
+  bottom: 24px;
+  width: 260px;
   max-height: none;
   transform: none;
 }
 
-@media (max-height: 800px) {
+@media (max-width: 1100px) {
+  body.catheter-focus #tracker-panel {
+    width: 190px;
+    left: calc(50% - 200px);
+  }
   body.catheter-focus #trace-panel {
-    width: 340px;
-    top: 118px;
+    width: 210px;
   }
 }
 

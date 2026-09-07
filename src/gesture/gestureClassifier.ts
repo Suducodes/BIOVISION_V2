@@ -15,9 +15,18 @@ export interface ClassifierConfig {
 const DEFAULTS: ClassifierConfig = {
   // Weighted toward the latest raw sample: less lag between hand and specimen,
   // at the cost of a little more jitter (the render-side damping absorbs it).
+  // Tuned assuming a call roughly every REFERENCE_FRAME_MS — see applyEma()
+  // for why the actual call rate isn't guaranteed to match that, and how the
+  // effective per-call weight is corrected for when it doesn't.
   emaAlpha: 0.7,
   confirmFrames: 2,
 };
+
+const REFERENCE_FRAME_MS = 1000 / 30;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
 
 /**
  * Turns raw MediaPipe landmarks into a stable, smoothed {@link GestureSignals}
@@ -43,6 +52,7 @@ export class GestureClassifier {
   private pendingCount = 0;
 
   private primaryPalm?: { x: number; y: number };
+  private lastFrameAt: number | null = null;
 
   constructor(config?: Partial<ClassifierConfig>) {
     this.cfg = { ...DEFAULTS, ...config };
@@ -110,6 +120,7 @@ export class GestureClassifier {
     this.pendingMode = 'IDLE';
     this.pendingCount = 0;
     this.primaryPalm = undefined;
+    this.lastFrameAt = null;
   }
 
   /**
@@ -138,9 +149,27 @@ export class GestureClassifier {
     // rather than blending across a discontinuity.
     if (rawHands.length !== this.smoothed.length) {
       this.smoothed = rawHands.map((h) => h.map((p) => ({ ...p })));
+      this.lastFrameAt = performance.now();
       return;
     }
-    const a = this.cfg.emaAlpha;
+
+    // emaAlpha (0.7) was tuned assuming a call roughly every ~33ms — the
+    // healthy end of this pipeline's tracking rate. But `classify()` runs
+    // once per *arrived* tracker result, and that rate isn't guaranteed:
+    // a slow inference (CPU delegate, thermal throttling, a loaded machine)
+    // stretches the real time between calls without changing the fixed
+    // per-call blend at all. The smoothing then takes the same number of
+    // calls to converge, which is now a much longer number of *seconds* —
+    // exactly what "the hand trails behind, then catches up in a chunk"
+    // looks like. Scaling the effective alpha by the real elapsed time,
+    // the same correction interactionController.ts's damp() already
+    // applies to position/rotation/zoom, keeps the smoothing's real-time
+    // catch-up speed constant regardless of how often frames arrive.
+    const now = performance.now();
+    const deltaMs = this.lastFrameAt !== null ? now - this.lastFrameAt : REFERENCE_FRAME_MS;
+    this.lastFrameAt = now;
+    const a = 1 - Math.pow(1 - this.cfg.emaAlpha, clamp(deltaMs, 1, 500) / REFERENCE_FRAME_MS);
+
     for (let h = 0; h < rawHands.length; h++) {
       for (let i = 0; i < rawHands[h]!.length; i++) {
         const raw = rawHands[h]![i]!;

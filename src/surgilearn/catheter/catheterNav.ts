@@ -73,6 +73,15 @@ const MAX_ADVANCE_RATE = 0.14;
 // of perception, not as a shaking camera that makes the lumen hard to steer.
 const CAMERA_BOB = 0.004;
 
+// Headlamp intensity is recomputed every frame as HEADLAMP_TARGET times the
+// *local* lumen radius to this power, rather than a flat constant — the
+// wall is always roughly one radius from the camera, so this keeps the
+// illuminated wall a consistent brightness whether the vessel is the wide
+// LAD ostium or a lesion narrowed to a third of that, instead of blowing out
+// on the wider segments and going dark on the narrow ones.
+const HEADLAMP_DECAY = 1.4;
+const HEADLAMP_TARGET = 3.5;
+
 // A steering deflection can reach this far past the "safe" radius before
 // being clamped — past DEFLECT_REACH is the same as bottoming out, which is
 // what makes wall contact a real, reachable event rather than something the
@@ -185,7 +194,16 @@ export class CatheterNav {
     // explicit layer tag here the interior would render pitch black. A dim
     // ambient fill alongside the headlamp keeps the tube from going fully
     // black just past the headlamp's falloff.
-    this.headlamp = new THREE.PointLight(0xfff0e0, 6, 0, 1.4);
+    //
+    // Intensity is set per-frame in update(), scaled to the local lumen
+    // radius — see HEADLAMP_TARGET. A flat constant here was copied from the
+    // outside zoom-dive's headlamp, tuned for a camera sitting roughly one
+    // whole unit from the specimen surface. This camera sits centimetre-close
+    // to the wall (vessel radius is ~0.02-0.05 units), 20-50x nearer, and
+    // with inverse-power falloff that's over 100x too bright at this range —
+    // the interior rendered as a fully blown-out white/pink blob, not a lit
+    // tube.
+    this.headlamp = new THREE.PointLight(0xfff0e0, 0, 0, HEADLAMP_DECAY);
     this.headlamp.layers.set(NAV_LAYER);
     this.camera.add(this.headlamp);
 
@@ -405,8 +423,10 @@ export class CatheterNav {
     this.camera.position.copy(this.scratchPoint).add(this.scratchOffset);
     // Tiny along-axis bob on each beat — the vessel pushing past the wire.
     this.camera.position.addScaledVector(this.scratchTangent, beat * CAMERA_BOB);
-    // Headlamp brightens fractionally on systole, so the walls "flush".
-    this.headlamp.intensity = 6 + beat * 2.2;
+    // Headlamp scaled to the local lumen radius (see HEADLAMP_TARGET), and
+    // brightens fractionally on systole so the walls "flush".
+    const headlampBase = HEADLAMP_TARGET * Math.pow(radius, HEADLAMP_DECAY);
+    this.headlamp.intensity = headlampBase * (1 + beat * 0.3);
     this.vessel.curve.getPointAt(Math.min(1, this.t + LOOKAHEAD_T), this.scratchLook);
     // lookAt expects a world-space target (it corrects for the parent's
     // rotation internally) — the target above is rig-local, so it has to be

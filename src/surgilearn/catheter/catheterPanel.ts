@@ -99,7 +99,12 @@ export class CatheterPanel {
     this.startButton.textContent = 'RUN AGAIN →';
     this.scorecard.classList.remove('sl-hidden');
 
-    this.scoreValue.textContent = String(result.score);
+    // No text node on the element itself — the ring is drawn with a CSS
+    // mask that would cut a real text node in half along with the ring, so
+    // the number is drawn by a ::after pseudo-element instead (see
+    // .trace-score-value in surgilearn.css), reading from this attribute.
+    this.scoreValue.setAttribute('data-score', String(result.score));
+    this.scoreValue.style.setProperty('--pct', String(result.score));
     this.scoreValue.className = `trace-score-value ${grade(result.score)}`;
     setBar(this.scoreBars, 'accuracy-bar', result.accuracy);
     setBar(this.scoreBars, 'smoothness-bar', result.smoothness);
