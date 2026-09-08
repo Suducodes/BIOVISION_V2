@@ -507,51 +507,6 @@ body {
   display: none;
 }
 
-/* Hidden until gesture tracking is live — nothing to freeze before then.
-   Sits over the bottom-left corner of the live camera feed (not top-right —
-   that's already occupied by the tracker-delegate/camera-fps readout in
-   .tracker-label). */
-#pointer-toggle {
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 9px 5px 7px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  background: rgba(4, 10, 22, 0.86);
-  color: var(--text-dim);
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-}
-
-#pointer-toggle .cam-glyph {
-  font-size: 12px;
-  line-height: 1;
-}
-
-#pointer-toggle:hover {
-  color: var(--text);
-  border-color: var(--edge-strong);
-}
-
-#pointer-toggle[aria-pressed='true'] {
-  color: var(--bg-0);
-  background: linear-gradient(180deg, #4fe6ff, var(--cyan));
-  border-color: transparent;
-  box-shadow: 0 2px 12px rgba(52, 227, 255, 0.35);
-}
-
-#pointer-toggle.hidden {
-  display: none;
-}
-
 /* --- Organ switcher ----------------------------------------------------- */
 
 #organ-switcher {
@@ -597,6 +552,195 @@ body {
 .organ-glyph {
   font-size: 16px;
   line-height: 1;
+}
+
+/* --- Drag-and-drop GLB loader --------------------------------------------- */
+
+#drop-control {
+  align-self: center;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px dashed var(--edge-strong, var(--edge));
+  border-radius: 11px;
+  background: var(--panel);
+  backdrop-filter: blur(16px);
+  color: var(--text-dim);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+#drop-control:hover {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: rgba(70, 200, 255, 0.07);
+}
+
+#drop-file-input.hidden {
+  display: none;
+}
+
+/* Full-viewport highlight while a file is being dragged over the page —
+   invisible at rest, so it never competes with #drop-control for attention
+   until there's actually something to catch. */
+#drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 10, 22, 0.82);
+  border: 3px dashed var(--cyan);
+  pointer-events: none;
+}
+
+#drop-overlay.active {
+  display: flex;
+}
+
+#drop-overlay span {
+  padding: 14px 28px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+/* --- Wireless pedal panel ------------------------------------------------- */
+
+#pedal-panel {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pedal-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.handtrack-indicator,
+.pedal-indicator {
+  flex: 1;
+  padding: 6px 9px;
+  border-radius: 7px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--edge);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.handtrack-indicator.live {
+  color: var(--teal);
+  border-color: rgba(56, 224, 143, 0.4);
+  background: rgba(56, 224, 143, 0.08);
+}
+
+.handtrack-indicator.paused {
+  color: var(--amber);
+  border-color: rgba(255, 206, 106, 0.45);
+  background: rgba(255, 206, 106, 0.1);
+}
+
+#handtrack-toggle {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--cyan);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+#handtrack-toggle:hover {
+  background: rgba(70, 200, 255, 0.12);
+}
+
+.pedal-indicator {
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.pedal-indicator.live {
+  color: var(--teal);
+  border-color: rgba(56, 224, 143, 0.4);
+  background: rgba(56, 224, 143, 0.08);
+}
+
+.pedal-indicator.connecting {
+  color: var(--cyan-dim, var(--cyan));
+  border-color: rgba(70, 200, 255, 0.3);
+}
+
+.pedal-indicator.offline {
+  color: var(--text-dim);
+}
+
+#pedal-ip {
+  width: 92px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--edge);
+  background: rgba(2, 6, 14, 0.7);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  outline: none;
+}
+
+#pedal-ip:focus {
+  border-color: var(--cyan);
+}
+
+#pedal-connect,
+#pedal-connect-ble {
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+#pedal-connect:hover,
+#pedal-connect-ble:hover {
+  color: var(--text);
+  background: rgba(70, 200, 255, 0.12);
+}
+
+#pedal-connect-ble {
+  flex: 1;
+}
+
+#pedal-connect-ble:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+#pedal-connect-ble:disabled:hover {
+  color: var(--text-dim);
+  background: var(--panel);
 }
 
 /* --- Settings / calibration --------------------------------------------- */

@@ -48,8 +48,8 @@ export function buildOrganSwitcher(
 
 /**
  * Marks a specimen active without a click — needed when something other than
- * the user drives the swap (entering CHALLENGE mode, or advancing to the next
- * case from the debrief).
+ * the user drives the swap. `id` may not match any button (a dropped custom
+ * GLB doesn't have one), in which case every button just goes inactive.
  */
 export function setActiveOrgan(id: string): void {
   const container = document.getElementById('organ-switcher');

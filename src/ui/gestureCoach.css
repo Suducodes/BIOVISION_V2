@@ -1,8 +1,6 @@
 /* Live gesture vocabulary, mounted inside the tracker panel.
    Deliberately placed next to the camera feed rather than floating over the
-   viewport: the learner's attention is already on their own hand there, and
-   the bottom-centre and left/right rails are all spoken for by the mission
-   panel, region label and catheter HUD. */
+   viewport: the learner's attention is already on their own hand there. */
 
 #gesture-coach {
   display: grid;

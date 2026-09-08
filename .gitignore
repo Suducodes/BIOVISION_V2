@@ -8,3 +8,8 @@ public/handWorker.js
 # SurgiLearn runtime config — holds the Claude API key. Copy config.example.js
 # to public/config.js locally; never commit the filled-in version.
 public/config.js
+
+# Pedal firmware — holds real WiFi credentials. Copy pedal.ino.example to
+# pedal.ino locally, fill in your network, flash from there; never commit
+# the filled-in version.
+firmware/pedal/pedal.ino

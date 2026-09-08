@@ -11,10 +11,8 @@ export interface OrganDef {
   logTitle: string;
   /** One-line provenance shown in the specimen log. */
   source: string;
-  /** Optional switcher grouping, e.g. the SurgiLearn coronary case library. */
+  /** Optional switcher grouping, if the library ever grows enough to need one. */
   group?: string;
-  /** Set when this specimen is a scored SurgiLearn case. */
-  caseId?: string;
 }
 
 /**

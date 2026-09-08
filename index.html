@@ -50,6 +50,17 @@
 
         <nav id="organ-switcher" aria-label="Select organ"></nav>
 
+        <!-- Drag-and-drop is the second way to get a specimen on screen —
+             the whole viewport is also a drop target (see dropzone.ts) for
+             anyone who just drags a file straight onto the page, but this
+             gives that a discoverable, deliberate home and a click-to-browse
+             fallback. -->
+        <button id="drop-control" type="button" title="Drop a .glb/.gltf file here, or click to browse">
+          <span class="cam-glyph">📦</span>
+          DROP .GLB
+        </button>
+        <input id="drop-file-input" type="file" accept=".glb,.gltf" class="hidden" />
+
         <section id="hud">
           <div class="hud-title">SYSTEM TELEMETRY</div>
           <div class="hud-row">
@@ -108,14 +119,30 @@
             <span class="cam-glyph">◉</span>
             ENABLE GESTURE CONTROL
           </button>
-          <!-- One hand normally drives both manipulation (move/zoom) and the
-               touchless identify cursor at once, so pointing at a vessel to
-               hold on it also drags/zooms the specimen out from under the
-               fingertip. This freezes manipulation so the hand only points. -->
-          <button id="pointer-toggle" type="button" class="hidden" aria-pressed="false" title="Freeze move/zoom so the hand only points — for identifying vessels without dragging the specimen">
-            <span class="cam-glyph">👆</span>
-            POINTER MODE
-          </button>
+        </div>
+
+        <!-- Wireless foot-pedal (XIAO ESP32-S3 + FSR), two interchangeable
+             transports — BLE is the primary path (doesn't touch venue WiFi
+             at all, so it survives bad conference WiFi), WiFi/WebSocket is
+             the fallback for browsers without Web Bluetooth (Safari/Firefox).
+             Two independent indicators on purpose: whether the PEDAL is
+             physically connected, and whether GESTURE CONTROL is currently
+             live — a judge watching needs the second one to be unambiguous
+             even if the first is offline (manual hold-button keeps working
+             either way). -->
+        <div id="pedal-panel">
+          <div class="pedal-row">
+            <span id="handtrack-indicator" class="handtrack-indicator paused">● GESTURE PAUSED</span>
+            <button id="handtrack-toggle" type="button" title="Manually pause or resume gesture control">⏯</button>
+          </div>
+          <div class="pedal-row">
+            <span id="pedal-indicator" class="pedal-indicator offline">PEDAL OFFLINE</span>
+            <button id="pedal-connect-ble" type="button">Connect Bluetooth</button>
+          </div>
+          <div class="pedal-row">
+            <input id="pedal-ip" type="text" inputmode="decimal" placeholder="pedal IP (WiFi fallback)" autocomplete="off" />
+            <button id="pedal-connect" type="button">Connect</button>
+          </div>
         </div>
       </section>
 
@@ -182,11 +209,6 @@
       </div>
     </div>
 
-    <!-- SurgiLearn runtime config (Claude API key). Gitignored and optional —
-         a 404 here is expected and harmless; the AI debrief simply stays in
-         its placeholder state. Copy config.example.js to public/config.js to
-         enable it. -->
-    <script src="./config.js"></script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

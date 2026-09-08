@@ -1,0 +1,104 @@
+/**
+ * Bio-Vision wireless pedal — XIAO ESP32-S3 + FSR.
+ *
+ * Broadcasts {"pedal": 0.0-1.0} over a WebSocket on port 81, matching
+ * exactly what src/input/pedalController.ts on the browser side expects.
+ * That module treats a rising edge above ~0.5 as one discrete toggle and
+ * debounces on the way back down past ~0.3 — this firmware only has to
+ * report an honest, reasonably clean 0..1 reading; the toggle/debounce
+ * decision lives entirely on the browser side, not here.
+ *
+ * Library required: "WebSockets" by Markus Sattler (Links2004) — install via
+ * Arduino IDE's Library Manager.
+ *
+ * Wiring — two wires, no discrete resistor:
+ *   XIAO 3V3 -> FSR leg 1
+ *   FSR leg 2 -> XIAO D0
+ * D0 is configured INPUT_PULLDOWN below, so the chip's own internal pulldown
+ * resistor completes the voltage divider instead of an external one — one
+ * fewer physical part, at the cost of a higher, less predictable divider
+ * resistance than a fixed 10k would give, which is exactly why this
+ * calibrates itself against a runtime baseline rather than assuming fixed
+ * raw-ADC bounds.
+ *
+ * Power: LiPo red -> VUSB, black -> GND. Powers the board directly off the
+ * battery; note this bypasses the XIAO's onboard JST charge-management
+ * circuit, so the battery won't recharge through this connection even with
+ * USB-C plugged in at the same time — charge it separately if it runs low.
+ */
+
+#include <WiFi.h>
+#include <WebSocketsServer.h>
+
+const char* ssid     = "YOUR_WIFI_NAME";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+WebSocketsServer webSocket = WebSocketsServer(81);
+
+const int fsrPin = D0;
+int baseline = 0;
+
+float smoothed = 0;
+const float smoothing = 0.08;
+const float deadband = 0.03;
+
+unsigned long lastSample = 0;
+const int sampleIntervalMs = 30;
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t len) {
+  if (type == WStype_CONNECTED) Serial.printf("[ws %u] client connected\n", num);
+}
+
+void setup() {
+  Serial.begin(115200);
+  analogSetAttenuation(ADC_11db);
+  pinMode(fsrPin, INPUT_PULLDOWN);
+
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(400);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.print("Connected. XIAO IP address: ");
+  Serial.println(WiFi.localIP()); // <-- type this into the app's "pedal IP" field
+
+  // Baseline calibration on boot: assumes the pedal is untouched at power-on.
+  // If the app's PEDAL indicator never seems to settle at "unpressed" after
+  // connecting, it's almost always this — someone had a foot on it while it
+  // booted. Power-cycle with the pedal clear and it self-corrects.
+  long sum = 0;
+  for (int i = 0; i < 20; i++) { sum += analogRead(fsrPin); delay(20); }
+  baseline = sum / 20;
+  Serial.print("Baseline: ");
+  Serial.println(baseline);
+
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+}
+
+void loop() {
+  webSocket.loop();
+
+  unsigned long now = millis();
+  if (now - lastSample >= sampleIntervalMs) {
+    lastSample = now;
+
+    int raw = analogRead(fsrPin);
+    float pedal = (float)(raw - baseline) / (4095 - baseline);
+    pedal = constrain(pedal, 0.0f, 1.0f);
+
+    // Deadband + slow exponential blend: small noise around the current
+    // value is ignored outright rather than just damped, so tiny jitter at
+    // rest doesn't add up into drift the way pure smoothing alone can.
+    float diff = pedal - smoothed;
+    if (abs(diff) > deadband) {
+      smoothed = smoothed + smoothing * diff;
+    }
+
+    char msg[32];
+    snprintf(msg, sizeof(msg), "{\"pedal\":%.3f}", smoothed);
+    webSocket.broadcastTXT(msg);
+  }
+}

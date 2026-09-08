@@ -66,10 +66,9 @@ export interface GestureSignals {
   /** Thumb-index aperture of the primary hand — drives zoom directly. */
   pinchDistance?: number;
   /**
-   * Index fingertip of the primary hand. Read-only as far as the manipulation
-   * pipeline is concerned — the SurgiLearn layer uses it as a touchless cursor
-   * for anatomical identification, which is why pointing at a vessel never
-   * disturbs move/rotate/zoom.
+   * Index fingertip of the primary hand. Not read by the manipulation
+   * pipeline itself — exposed for anything that wants a touchless cursor
+   * independent of move/rotate/zoom (nothing currently consumes it).
    */
   indexTip?: { x: number; y: number };
   handCount: number;

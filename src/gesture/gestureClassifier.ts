@@ -61,9 +61,9 @@ export class GestureClassifier {
   /**
    * The smoothed skeleton `classify()` computes for its own internal use
    * (mode detection, centroid, pinch distance) but doesn't otherwise expose —
-   * anything that wants to read a tracked hand's actual landmarks (currently
-   * just catheter-nav steering) should read this instead of the tracker's
-   * raw per-frame output, which is noisy enough on its own to visibly jitter.
+   * anything that wants to read a tracked hand's actual landmarks should read
+   * this instead of the tracker's raw per-frame output, which is noisy
+   * enough on its own to visibly jitter.
    * Live reference, safe to read once per frame and discard; `classify()`
    * mutates the same objects in place rather than replacing them each frame,
    * except right after a hand count change.

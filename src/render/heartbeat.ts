@@ -6,9 +6,9 @@
  * sine reads as *breathing*, which is the wrong organ — the double-tap and
  * the pause between beats are what make it recognisable as a heart.
  *
- * Shared so the specimen's outer pulse and the catheter view's interior
- * bob/headlamp flush are driven off one clock and can never drift into
- * looking like two different hearts beating at once.
+ * A standalone module (rather than inlined where it's used) so anything
+ * else that wants to pulse in time — a light, a UI element — reads off the
+ * same clock instead of drifting into looking like two different hearts.
  */
 
 export const HEARTBEAT_BPM = 72;
