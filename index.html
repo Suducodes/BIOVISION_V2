@@ -133,7 +133,16 @@
         <div id="pedal-panel">
           <div class="pedal-row">
             <span id="handtrack-indicator" class="handtrack-indicator paused">● GESTURE PAUSED</span>
-            <button id="handtrack-toggle" type="button" title="Manually pause or resume gesture control">⏯</button>
+            <button id="handtrack-toggle" type="button" title="Hold to activate gesture control (mirrors the pedal — releases the instant you let go)">⏯</button>
+          </div>
+          <div class="pedal-row">
+            <label class="switch-row" for="handtrack-switch" title="Leave gesture control on permanently — for desk testing without the pedal">
+              <span class="switch-label">ALWAYS ON</span>
+              <span class="switch">
+                <input id="handtrack-switch" type="checkbox" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </span>
+            </label>
           </div>
           <div class="pedal-row">
             <span id="pedal-indicator" class="pedal-indicator offline">PEDAL OFFLINE</span>

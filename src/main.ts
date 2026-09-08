@@ -182,6 +182,7 @@ async function boot(): Promise<void> {
   // the other down first, so they can't fight over the same boolean.
   const handtrackIndicator = document.getElementById('handtrack-indicator')!;
   const handtrackToggleButton = document.getElementById('handtrack-toggle') as HTMLButtonElement;
+  const handtrackSwitch = document.getElementById('handtrack-switch') as HTMLInputElement;
   const pedalIndicator = document.getElementById('pedal-indicator')!;
   const pedalConnectBleButton = document.getElementById('pedal-connect-ble') as HTMLButtonElement;
   const pedalIpInput = document.getElementById('pedal-ip') as HTMLInputElement;
@@ -191,6 +192,10 @@ async function boot(): Promise<void> {
   const renderHandTrackState = () => {
     handtrackIndicator.textContent = handTrackingEnabled ? '● GESTURE LIVE' : '● GESTURE PAUSED';
     handtrackIndicator.className = `handtrack-indicator ${handTrackingEnabled ? 'live' : 'paused'}`;
+    // Keeps the switch honest even when the pedal or hold-button is what
+    // actually changed the state — it always shows what's really live, not
+    // just what it was last set to.
+    handtrackSwitch.checked = handTrackingEnabled;
   };
   const setHandTracking = (on: boolean) => {
     if (on === handTrackingEnabled) return;
@@ -198,6 +203,13 @@ async function boot(): Promise<void> {
     renderHandTrackState();
   };
   renderHandTrackState(); // sync the DOM to the real default before any input arrives
+
+  // "ALWAYS ON" — a plain latch for desk testing without the pedal, so
+  // gesture control doesn't require holding anything down. It writes to the
+  // same boolean as the pedal and the hold-button, so whichever one fires
+  // last wins; that's fine, since this switch is meant to be used *instead*
+  // of the physical inputs, not alongside them mid-demo.
+  handtrackSwitch.addEventListener('change', () => setHandTracking(handtrackSwitch.checked));
 
   handtrackToggleButton.addEventListener('pointerdown', () => setHandTracking(true));
   handtrackToggleButton.addEventListener('pointerup', () => setHandTracking(false));
