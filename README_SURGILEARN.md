@@ -452,7 +452,7 @@ edge. All four metrics and their units stay live.
 
 Built on Bio-Vision, the zero-footprint virtual dissection platform whose
 performance envelope — 60 Hz render, ~30 fps monocular hand tracking, sub-50 ms
-input latency on an Intel i3 with no discrete GPU — is reported in the EMBC 2026
+input latency on an Intel i3 with no discrete GPU — is reported in the TENCON 2026
 submission. Those figures are the reason a simulation-based surgical curriculum
 can run on the hardware a medical school already owns, and they are displayed
 live in the telemetry HUD during any demonstration.

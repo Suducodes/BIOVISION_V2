@@ -64,7 +64,7 @@ async function boot(): Promise<void> {
       for (const child of stage.pivot.children) disposeSpecimen(child);
       stage.pivot.clear();
       stage.pivot.add(model.root);
-      stage.frameSubject(model.radius);
+      stage.frameSubject(model.radius * (organ.fit ?? 1));
       controller.reset();
       zoomFar = stage.framingDistance;
       zoomNear = model.radius * 0.06;

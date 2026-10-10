@@ -37,7 +37,7 @@ Slide time budget for a 10-minute pitch: **1 · 1.5 min — 2 · 2.5 min —
 - **SurgiLearn runs in a browser tab.** No install, no headset, no login, no
   server. A laptop with a webcam is the entire hardware requirement.
 - Built on **Bio-Vision**, a peer-reviewed monocular gesture-controlled anatomy
-  platform (EMBC 2026): **60 Hz render, ~30 fps hand tracking, sub-50 ms input
+  platform (TENCON 2026): **60 Hz render, ~30 fps hand tracking, sub-50 ms input
   latency on an Intel i3 with no discrete GPU.**
 
 **Visual:** split frame — left, a photo-style block captioned "£12,000 / seat,

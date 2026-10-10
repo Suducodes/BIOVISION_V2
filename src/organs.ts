@@ -13,6 +13,12 @@ export interface OrganDef {
   source: string;
   /** Optional switcher grouping, if the library ever grows enough to need one. */
   group?: string;
+  /**
+   * Framing multiplier, default 1. Auto-framing fits the bounding sphere, which
+   * overstates how much of the frame a sparse, wiry specimen actually fills —
+   * a vessel tree is mostly empty space. Values below 1 pull the camera closer.
+   */
+  fit?: number;
 }
 
 /**
@@ -37,5 +43,14 @@ export const ORGANS: OrganDef[] = [
     url: asset('models/lungs.glb'),
     logTitle: 'PULMONARY SPECIMEN',
     source: 'Segmented from CT — author’s own reconstruction',
+  },
+  {
+    id: 'coronary',
+    label: 'Coronary',
+    glyph: '🩸',
+    url: asset('models/coronary.glb'),
+    logTitle: 'CORONARY SPECIMEN',
+    source: 'LCA + RCA segmented from CTA — author’s own model',
+    fit: 0.74,
   },
 ];
