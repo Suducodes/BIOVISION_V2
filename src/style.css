@@ -1123,6 +1123,27 @@ body {
   color: var(--text-dim);
 }
 
+.voice-lang {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+.voice-lang select {
+  padding: 5px 8px;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  background: rgba(3, 7, 16, 0.75);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 11.5px;
+}
+
 /* Typed commands: the same vocabulary as speech, for a quiet room, a blocked
    microphone or someone who cannot speak. */
 .voice-typed {

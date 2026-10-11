@@ -119,6 +119,14 @@
         </button>
         <div class="voice-body">
           <button id="voice-toggle" class="voice-toggle" type="button">START LISTENING</button>
+          <label class="voice-lang" title="Which English the recogniser expects. Try another if words are misheard.">
+            <span>ACCENT</span>
+            <select id="voice-lang">
+              <option value="en-IN">English · India</option>
+              <option value="en-US">English · US</option>
+              <option value="en-GB">English · UK</option>
+            </select>
+          </label>
           <p id="voice-heard" class="voice-heard"></p>
           <form id="voice-typed-form" class="voice-typed" autocomplete="off">
             <input id="voice-typed" type="text" placeholder="…or type a command, e.g. mitral valve" aria-label="Type a voice command" />

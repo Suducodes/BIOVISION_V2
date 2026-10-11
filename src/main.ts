@@ -68,6 +68,7 @@ async function boot(): Promise<void> {
       onChip: (id) => director?.pick(id),
       onMode: (mode) => director?.toggleMode(mode),
       onTyped: (text) => runText(text),
+      onLanguage: (lang) => voice.setLanguage(lang),
     },
     VoiceNavigator.isSupported(),
   );
@@ -269,6 +270,8 @@ async function boot(): Promise<void> {
       }
     },
   });
+
+  voice.setLanguage(voicePanel.language);
 
   /**
    * Typed commands, chip phrases and the debug hook all run through the same

@@ -1,4 +1,5 @@
 import { matchCommand, type Intent, type Match, type MatchContext, type Vocabulary } from './commandMatcher';
+import { HINT_PHRASES } from './soundAlikes';
 
 export type VoiceState = 'off' | 'starting' | 'listening' | 'error';
 
@@ -47,6 +48,11 @@ export class VoiceNavigator {
   private lastFired = { key: '', at: 0 };
   private restartTimer: number | undefined;
   private settleTimer: number | undefined;
+  /** Recogniser language: Indian English by default; switchable in the panel. */
+  private lang = 'en-IN';
+  // Phrase hints are newer than the rest of the API; dropped for the session
+  // the first time the service says it can't take them.
+  private hints = true;
 
   static isSupported(): boolean {
     return Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition);
@@ -78,6 +84,12 @@ export class VoiceNavigator {
     this.handlers.onState('off');
   }
 
+  /** Switches the recogniser's language (accent model), restarting it if live. */
+  setLanguage(lang: string): void {
+    this.lang = lang;
+    if (this.wanted) this.recognition?.abort(); // onend reopens with the new language
+  }
+
   /**
    * Runs one transcript through exactly the path a recognised utterance takes.
    * Used by the on-screen tester and for exercising voice without a microphone.
@@ -90,10 +102,10 @@ export class VoiceNavigator {
     const rec = new Ctor();
     rec.continuous = true;
     rec.interimResults = true;
-    rec.maxAlternatives = 3;
-    // English as spoken in India; recognition of the accent is noticeably
-    // better than with the generic US model, and the vocabulary is plain English.
-    rec.lang = 'en-IN';
+    // More guesses, more chances: the right words are often the third or fourth.
+    rec.maxAlternatives = 5;
+    rec.lang = this.lang;
+    this.addHints(rec);
 
     rec.onstart = () => this.handlers.onState('listening');
 
@@ -111,6 +123,11 @@ export class VoiceNavigator {
       // Silence and a deliberate abort are normal; everything else means the
       // recogniser can't carry on, and restarting would only loop.
       if (event.error === 'no-speech' || event.error === 'aborted') return;
+      // The service refused the phrase hints: carry on without them.
+      if (event.error === 'phrases-not-supported') {
+        this.hints = false;
+        return;
+      }
       this.wanted = false;
       const reasons: Record<string, string> = {
         'not-allowed': 'Microphone access was blocked. Allow it for this site and try again.',
@@ -168,6 +185,23 @@ export class VoiceNavigator {
       this.settleTimer = window.setTimeout(() => this.fire(match, text.trim()), SETTLE_MS);
     }
     return tentative.match;
+  }
+
+  /**
+   * Tells the recogniser which words to expect, where the browser supports
+   * phrase hints (contextual biasing). Medical words a general model rarely
+   * hears — tricuspid, mitral, auricle — are boosted. Feature-detected, and
+   * harmless where missing.
+   */
+  private addHints(rec: SpeechRecognitionLike): void {
+    const Phrase = (window as unknown as { SpeechRecognitionPhrase?: new (phrase: string, boost?: number) => unknown })
+      .SpeechRecognitionPhrase;
+    if (!this.hints || !Phrase || !('phrases' in rec)) return;
+    try {
+      (rec as unknown as { phrases: unknown[] }).phrases = HINT_PHRASES.map((p) => new Phrase(p, 6));
+    } catch {
+      this.hints = false;
+    }
   }
 
   private fire(match: Match, heard: string): void {

@@ -9,7 +9,11 @@ export interface VoicePanelHandlers {
   onMode(mode: ModeId): void;
   /** A command was typed instead of spoken. */
   onTyped(text: string): void;
+  /** The recogniser's language (accent) was changed. */
+  onLanguage(lang: string): void;
 }
+
+const LANG_KEY = 'biovision.voiceLang';
 
 const STATE_TEXT: Record<VoiceState, string> = {
   off: 'OFF',
@@ -61,6 +65,21 @@ export class VoicePanel {
     for (const button of this.modes.querySelectorAll<HTMLButtonElement>('[data-mode]')) {
       button.addEventListener('click', () => this.handlers.onMode(button.dataset.mode as ModeId));
     }
+    const lang = el('voice-lang') as HTMLSelectElement;
+    try {
+      const saved = localStorage.getItem(LANG_KEY);
+      if (saved && [...lang.options].some((o) => o.value === saved)) lang.value = saved;
+    } catch {
+      // Storage blocked: the default is fine.
+    }
+    lang.addEventListener('change', () => {
+      try {
+        localStorage.setItem(LANG_KEY, lang.value);
+      } catch {
+        // Not remembered, but still applied.
+      }
+      this.handlers.onLanguage(lang.value);
+    });
     el('voice-typed-form').addEventListener('submit', (event) => {
       event.preventDefault();
       const text = this.typed.value.trim();
@@ -77,6 +96,11 @@ export class VoicePanel {
     }
     this.setState('off');
     this.setHeard('');
+  }
+
+  /** The language chosen in the panel (remembered between visits). */
+  get language(): string {
+    return (el('voice-lang') as HTMLSelectElement).value;
   }
 
   /** Rebuilds the chips for whichever specimen is loaded. */

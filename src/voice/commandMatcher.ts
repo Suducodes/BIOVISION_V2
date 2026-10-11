@@ -89,6 +89,8 @@ export interface Match {
   confident: boolean;
 }
 
+import { joinSplitWords, repairHearing } from './soundAlikes';
+
 /** Each phrase maps to one intent. Longer phrases win ties, so "zoom out" beats "zoom". */
 const INTENT_PHRASES: Array<[string, Intent]> = [
   ['reset', 'reset'],
@@ -325,7 +327,10 @@ const FILLER = new Set(
 const NARROWING = new Set(['left', 'right', 'main', 'common', 'artery', 'arteries', 'vein']);
 
 export function matchCommand(transcript: string, vocab: Vocabulary, context: MatchContext = {}): Match | null {
-  const tokens = tokenise(transcript);
+  const words = new Set<string>();
+  for (const [phrase] of INTENT_PHRASES) for (const w of tokenise(phrase)) words.add(w);
+  for (const t of vocab.targets) for (const alias of t.aliases) for (const w of tokenise(alias)) words.add(w);
+  const tokens = joinSplitWords(tokenise(repairHearing(transcript)), words);
   if (tokens.length === 0) return null;
 
   type Found = { command: VoiceCommand; phrase: string; start: number; end: number; length: number; inexact: number };
