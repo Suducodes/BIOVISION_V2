@@ -20,6 +20,11 @@ import { buildOrganSwitcher, setActiveOrgan } from './ui/organSwitcher';
 import { attachDropzone, looksLikeGlb } from './ui/dropzone';
 import { PedalController } from './input/pedalController';
 import { BlePedalController } from './input/blePedalController';
+import { SegmentHighlighter } from './render/segmentHighlight';
+import { VoiceNavigator } from './voice/voiceNavigator';
+import { matchCommand, type Match, type Vocabulary } from './voice/commandMatcher';
+import { VoicePanel } from './ui/voicePanel';
+import type { SegmentDef } from './segments';
 
 async function boot(): Promise<void> {
   const app = document.getElementById('app')!;
@@ -43,6 +48,20 @@ async function boot(): Promise<void> {
   let zoomNear = 0.1;
   let switching = false;
 
+  // Voice navigation state. The panel is built up front because loadOrgan
+  // refreshes its segment chips; the commands themselves are wired further
+  // down, once the gesture mapper they cooperate with exists.
+  let activeOrgan: OrganDef = ORGANS[0]!;
+  let activeSegments: SegmentDef[] = [];
+  let highlighter: SegmentHighlighter | null = null;
+  const voicePanel = new VoicePanel(
+    {
+      onToggleListening: () => voiceToggle(),
+      onChip: (id) => (id === 'reset' ? resetView() : focusSegment(id)),
+    },
+    VoiceNavigator.isSupported(),
+  );
+
   const loadOrgan = async (organ: OrganDef): Promise<void> => {
     if (switching) return;
     switching = true;
@@ -62,12 +81,24 @@ async function boot(): Promise<void> {
       // pivot must be disposed explicitly first, or geometries and textures
       // accumulate on every switch for the life of the session.
       for (const child of stage.pivot.children) disposeSpecimen(child);
+      highlighter?.dispose();
+      highlighter = null;
       stage.pivot.clear();
       stage.pivot.add(model.root);
       stage.frameSubject(model.radius * (organ.fit ?? 1));
       controller.reset();
       zoomFar = stage.framingDistance;
       zoomNear = model.radius * 0.06;
+
+      // Give the new specimen its named segments, if it has any.
+      activeOrgan = organ;
+      activeSegments = organ.segments ?? [];
+      if (activeSegments.length > 0) {
+        highlighter = new SegmentHighlighter(model.root, stage.pivot, activeSegments);
+      }
+      voicePanel.setSegments(activeSegments);
+      voicePanel.setActive(null);
+      voicePanel.setFocus(null);
 
       status.setSpecimen(organ.logTitle, [
         ['Source', organ.source],
@@ -147,6 +178,79 @@ async function boot(): Promise<void> {
   const mapper = new GestureMapper(controller);
   // Applies persisted calibration to the renderer, controller and mapper.
   new SettingsPanel(stage.renderer, controller, mapper);
+
+  // --- Voice navigation ---------------------------------------------------
+  // Say a segment's name and the specimen turns to it, centres it, and flies
+  // the camera in. Every move goes through the controller's ordinary damped
+  // targets, so it is as smooth as a gesture and a hand takes over seamlessly.
+
+  // Zoom is a smoothstep dolly (see the render loop); to land the camera a given
+  // distance from the anchor, run that mapping backwards.
+  const zoomForDistance = (distance: number): number => {
+    const eased = Math.min(1, Math.max(0, (zoomFar - distance) / (zoomFar - zoomNear)));
+    // Inverse of t²(3 − 2t).
+    return 0.5 - Math.sin(Math.asin(1 - 2 * eased) / 3);
+  };
+
+  function focusSegment(id: string, heard?: string): void {
+    const segment = activeSegments.find((s) => s.id === id);
+    if (!segment) return;
+    highlighter?.select(id);
+    controller.focusOn(
+      new THREE.Vector3(...segment.anchor),
+      new THREE.Vector3(...segment.view),
+      zoomForDistance(segment.distance),
+    );
+    mapper.holdForVoice();
+    voicePanel.setActive(id);
+    voicePanel.setFocus(segment.label, heard);
+    // A tapped chip has nothing "heard"; clear any stale transcript.
+    voicePanel.setHeard(heard ?? '');
+  }
+
+  function resetView(heard?: string): void {
+    highlighter?.select(null);
+    controller.reset();
+    mapper.holdForVoice();
+    voicePanel.setActive(null);
+    voicePanel.setFocus(null);
+    voicePanel.setHeard(heard ?? '');
+  }
+
+  const vocabulary = (): Vocabulary => ({
+    segments: activeSegments.map((s) => ({ id: s.id, aliases: s.aliases })),
+    organs: ORGANS.map((o) => ({ id: o.id, label: o.label })),
+  });
+
+  const applyVoice = (match: Match, heard: string): void => {
+    const { command } = match;
+    if (command.kind === 'segment') {
+      focusSegment(command.id, heard);
+    } else if (command.kind === 'reset') {
+      resetView(heard);
+    } else {
+      const organ = ORGANS.find((o) => o.id === command.id);
+      if (!organ) return;
+      if (organ.id === activeOrgan.id) {
+        resetView(heard);
+      } else {
+        setActiveOrgan(organ.id);
+        void loadOrgan(organ);
+      }
+    }
+  };
+
+  const voice = new VoiceNavigator({
+    vocabulary,
+    onCommand: applyVoice,
+    onHeard: (text) => voicePanel.setHeard(text),
+    onState: (state, detail) => voicePanel.setState(state, detail),
+  });
+
+  function voiceToggle(): void {
+    if (voice.listening) voice.stop();
+    else voice.start();
+  }
   const cameraFpsEl = document.getElementById('camera-fps')!;
   let overlayRenderer: HandOverlay | undefined;
   let latestHands: HandLandmarks[] = [];
@@ -314,6 +418,18 @@ async function boot(): Promise<void> {
       controller,
       loadOrgan,
       enableGestures,
+      focusSegment,
+      resetView,
+      // Run a transcript through the same path as a real utterance, so voice
+      // behaviour can be exercised without a microphone.
+      say: (text: string) => {
+        const match = matchCommand(text, vocabulary());
+        if (match) applyVoice(match, text);
+        return match;
+      },
+      get highlighter() {
+        return highlighter;
+      },
       pedal,
       blePedal,
       setHandTracking,
@@ -340,6 +456,7 @@ async function boot(): Promise<void> {
     requestAnimationFrame(renderLoop);
     const delta = clock.getDelta();
     controller.update(delta);
+    highlighter?.update(delta, clock.elapsedTime);
 
     const handPresent = latestHands.length > 0;
     const gainTarget = handPresent ? 0 : 1;

@@ -72,6 +72,44 @@ export class InteractionController {
     this.targetZoom = clamp(value, 0, 1);
   }
 
+  /**
+   * Flies to a point on the specimen: turns it so `view` (the unit vector from
+   * `anchor` toward where the viewer should be) points at the camera, slides it
+   * so `anchor` sits at the screen centre, and sets the zoom. Everything goes
+   * through the same damped targets as hand input, so the move is as smooth as
+   * a gesture and any later hand movement simply takes over from wherever it
+   * has got to.
+   *
+   * `anchor` and `view` are in the specimen's own model space (pivot at rest).
+   */
+  focusOn(anchor: THREE.Vector3, view: THREE.Vector3, zoom: number): void {
+    // Solve for the yaw (y) and pitch (x) that carry `view` onto +Z. The pivot
+    // uses three.js's default 'XYZ' order — matrix Rx · Ry — so the yaw acts
+    // first. Pick the yaw that zeroes the sideways component, leaving the
+    // vector in the vertical plane at length r; then the pitch that tips it
+    // onto the camera axis. Pitch lands in ±90° by construction, inside the
+    // range the rest of the controller keeps it to.
+    const v = view.clone().normalize();
+    const r = Math.hypot(v.x, v.z);
+    let yaw = Math.atan2(-v.x, v.z);
+    const pitch = Math.atan2(v.y, r);
+    // Yaw is unbounded, so choose the turn equivalent to the one nearest where
+    // the specimen is now — otherwise a view only 40° away can spin it 320°.
+    yaw += Math.round((this.pivot.rotation.y - yaw) / (2 * Math.PI)) * 2 * Math.PI;
+
+    this.targetRotation.set(pitch, yaw, 0);
+
+    // With the rotation fixed, where does the anchor land? Shift the whole
+    // specimen by the opposite so that point ends up at the origin, where the
+    // camera is already looking. The Euler must use the pivot's own order, or
+    // the same three angles describe a different rotation.
+    const turned = anchor
+      .clone()
+      .applyEuler(new THREE.Euler(pitch, yaw, 0, this.pivot.rotation.order));
+    this.targetPosition.copy(turned).negate();
+    this.targetZoom = clamp(zoom, 0, 1);
+  }
+
   /** Live, smoothed zoom — the render loop maps this to camera distance. */
   get zoom(): number {
     return this.liveZoom;

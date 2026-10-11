@@ -86,8 +86,11 @@
         </section>
       </div>
 
-      <!-- Left: mission-log style anatomical notes. Collapsed by default so
-           the specimen itself stays fully visible; tap the header to reveal. -->
+      <!-- Left column: specimen log and voice navigation. One flex column, so
+           opening either can only push the other down, never overlap it. Both
+           are collapsed by default so the specimen itself stays fully visible;
+           tap a header to reveal. -->
+      <div id="left-stack">
       <section id="notes" class="collapsed">
         <button id="notes-head" class="collapsible-head notes-head" type="button" aria-expanded="false">
           <span class="dot"></span>
@@ -103,6 +106,35 @@
           <span id="mode-chip" class="mode-chip idle">STANDBY</span>
         </div>
       </section>
+
+      <!-- Voice navigation: say a segment's name and the specimen turns and
+           flies to it. Off until asked, because the browser's recogniser sends
+           audio to its vendor — the only part of the app that isn't local. -->
+      <section id="voice" class="collapsed">
+        <button id="voice-head" class="collapsible-head" type="button" aria-expanded="false">
+          <span id="voice-dot" class="voice-dot"></span>
+          <h2>VOICE NAVIGATION</h2>
+          <span id="voice-state" class="voice-state">OFF</span>
+          <span class="chevron">›</span>
+        </button>
+        <div class="voice-body">
+          <button id="voice-toggle" class="voice-toggle" type="button">START LISTENING</button>
+          <p id="voice-heard" class="voice-heard">Say a segment name, or tap one below.</p>
+          <div id="voice-chips" class="voice-chips"></div>
+          <p id="voice-note" class="voice-note">
+            Uses your browser's speech service, which needs an internet
+            connection. Gesture and tap control stay fully offline.
+          </p>
+        </div>
+      </section>
+      </div>
+
+      <!-- Names the segment currently in focus, with what was heard. -->
+      <div id="focus-label" class="hidden" aria-live="polite">
+        <span class="focus-kicker">FOCUS</span>
+        <b id="focus-name"></b>
+        <span id="focus-heard"></span>
+      </div>
 
       <!-- Bottom-right: live camera feed with skeletal hand overlay (Fig. 1) -->
       <section id="tracker-panel">

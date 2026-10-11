@@ -1,4 +1,5 @@
 import { asset } from './paths';
+import { HEART_SEGMENTS, type SegmentDef } from './segments';
 
 export interface OrganDef {
   id: string;
@@ -19,6 +20,8 @@ export interface OrganDef {
    * a vessel tree is mostly empty space. Values below 1 pull the camera closer.
    */
   fit?: number;
+  /** Named regions voice navigation can fly to; absent means voice offers none. */
+  segments?: SegmentDef[];
 }
 
 /**
@@ -35,6 +38,7 @@ export const ORGANS: OrganDef[] = [
     url: asset('models/heart.glb'),
     logTitle: 'CARDIAC SPECIMEN',
     source: 'High-fidelity textured cardiac model',
+    segments: HEART_SEGMENTS,
   },
   {
     id: 'lungs',
