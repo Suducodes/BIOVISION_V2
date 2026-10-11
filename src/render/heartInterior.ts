@@ -383,7 +383,7 @@ class Flow {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           // Clamped: a particle passing right by the camera would otherwise ask
           // for a point thousands of pixels wide.
-          gl_PointSize = clamp(uSize / -mv.z, 1.0, 28.0);
+          gl_PointSize = clamp(uSize / -mv.z, 1.0, 20.0);
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `

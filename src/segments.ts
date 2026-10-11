@@ -334,16 +334,16 @@ export const HEART_SEGMENTS: SegmentDef[] = [
 
   // --- Inside (schematic) ---------------------------------------------------
   valve('tricuspid', 'Tricuspid valve', ['tricuspid valve', 'tricuspid', 'right atrioventricular valve', 'right av valve'],
-    norm([-0.29, 0.47, 0.83]), 1.3, '#ffe9b0',
+    norm([-0.29, 0.47, 0.83]), 1.65, '#ffe9b0',
     'The tricuspid valve, with three leaflets, between the right atrium and right ventricle. It snaps shut as the ventricles contract, so blood cannot flow backwards.'),
   valve('pulmonary', 'Pulmonary valve', ['pulmonary valve', 'pulmonic valve', 'pulmonic'],
-    norm([0.28, 0.54, 0.79]), 1.2, '#ffe9b0',
+    norm([0.28, 0.54, 0.79]), 1.55, '#ffe9b0',
     'The pulmonary valve, three half-moon cusps at the exit of the right ventricle. They open as the ventricle contracts.'),
   valve('mitral', 'Mitral valve', ['mitral valve', 'mitral', 'bicuspid valve', 'bicuspid', 'left atrioventricular valve'],
-    norm([0.71, 0.54, 0.45]), 1.3, '#ffe9b0',
+    norm([0.71, 0.54, 0.45]), 1.65, '#ffe9b0',
     'The mitral valve, the only valve with two leaflets, between the left atrium and left ventricle. Its closing, with the tricuspid’s, makes the first heart sound.'),
   valve('aortic', 'Aortic valve', ['aortic valve'],
-    norm([-0.19, 0.4, 0.89]), 1.2, '#ffe9b0',
+    norm([-0.19, 0.4, 0.89]), 1.55, '#ffe9b0',
     'The aortic valve. Its three cusps open as the left ventricle contracts, then close; that closure is part of the second heart sound.'),
   {
     id: 'ivs',
