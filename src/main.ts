@@ -21,9 +21,15 @@ import { attachDropzone, looksLikeGlb } from './ui/dropzone';
 import { PedalController } from './input/pedalController';
 import { BlePedalController } from './input/blePedalController';
 import { SegmentHighlighter } from './render/segmentHighlight';
+import { HeartInterior } from './render/heartInterior';
+import { HEARTBEAT_CYCLE_S } from './render/heartbeat';
 import { VoiceNavigator } from './voice/voiceNavigator';
-import { matchCommand, type Match, type Vocabulary } from './voice/commandMatcher';
+import { matchCommand, type Vocabulary } from './voice/commandMatcher';
+import { Narrator } from './voice/narrator';
+import { VoiceDirector } from './voice/voiceDirector';
 import { VoicePanel } from './ui/voicePanel';
+import { CaptionCard } from './ui/captionCard';
+import { AtlasLabels } from './ui/atlasLabels';
 import type { SegmentDef } from './segments';
 
 async function boot(): Promise<void> {
@@ -49,18 +55,24 @@ async function boot(): Promise<void> {
   let switching = false;
 
   // Voice navigation state. The panel is built up front because loadOrgan
-  // refreshes its segment chips; the commands themselves are wired further
-  // down, once the gesture mapper they cooperate with exists.
+  // refreshes its part chips; the director that acts on commands is wired
+  // further down, once the gesture mapper it cooperates with exists.
   let activeOrgan: OrganDef = ORGANS[0]!;
   let activeSegments: SegmentDef[] = [];
   let highlighter: SegmentHighlighter | null = null;
+  let interior: HeartInterior | null = null;
+  let director: VoiceDirector | undefined;
   const voicePanel = new VoicePanel(
     {
       onToggleListening: () => voiceToggle(),
-      onChip: (id) => (id === 'reset' ? resetView() : focusSegment(id)),
+      onChip: (id) => director?.pick(id),
+      onMode: (mode) => director?.toggleMode(mode),
+      onTyped: (text) => runText(text),
     },
     VoiceNavigator.isSupported(),
   );
+  const caption = new CaptionCard((id) => (id.startsWith('say:') ? runText(id.slice(4)) : director?.pick(id)));
+  const labels = new AtlasLabels((id) => director?.pick(id));
 
   const loadOrgan = async (organ: OrganDef): Promise<void> => {
     if (switching) return;
@@ -80,6 +92,8 @@ async function boot(): Promise<void> {
       // graph — it never frees their GPU buffers — so every mesh under the
       // pivot must be disposed explicitly first, or geometries and textures
       // accumulate on every switch for the life of the session.
+      interior?.dispose();
+      interior = null;
       for (const child of stage.pivot.children) disposeSpecimen(child);
       highlighter?.dispose();
       highlighter = null;
@@ -96,9 +110,27 @@ async function boot(): Promise<void> {
       if (activeSegments.length > 0) {
         highlighter = new SegmentHighlighter(model.root, stage.pivot, activeSegments);
       }
+      // The schematic interior is a separate small model; it streams in after
+      // the specimen is already on screen, and is dropped if the user has
+      // switched away by the time it arrives.
+      if (organ.interior) {
+        const forOrgan = organ;
+        void HeartInterior.load(organ.interior)
+          .then((loaded) => {
+            if (activeOrgan !== forOrgan || interior) {
+              loaded.dispose();
+              return;
+            }
+            interior = loaded;
+            stage.pivot.add(loaded.group);
+            loaded.setFlow(director?.flow ?? false);
+          })
+          .catch((error: unknown) => console.warn('[bio-vision] interior failed to load', error));
+      }
       voicePanel.setSegments(activeSegments);
       voicePanel.setActive(null);
       voicePanel.setFocus(null);
+      director?.onSpecimenChanged();
 
       status.setSpecimen(organ.logTitle, [
         ['Source', organ.source],
@@ -192,65 +224,85 @@ async function boot(): Promise<void> {
     return 0.5 - Math.sin(Math.asin(1 - 2 * eased) / 3);
   };
 
-  function focusSegment(id: string, heard?: string): void {
-    const segment = activeSegments.find((s) => s.id === id);
-    if (!segment) return;
-    highlighter?.select(id);
-    controller.focusOn(
-      new THREE.Vector3(...segment.anchor),
-      new THREE.Vector3(...segment.view),
-      zoomForDistance(segment.distance),
-    );
-    mapper.holdForVoice();
-    voicePanel.setActive(id);
-    voicePanel.setFocus(segment.label, heard);
-    // A tapped chip has nothing "heard"; clear any stale transcript.
-    voicePanel.setHeard(heard ?? '');
-  }
-
-  function resetView(heard?: string): void {
-    highlighter?.select(null);
-    controller.reset();
-    mapper.holdForVoice();
-    voicePanel.setActive(null);
-    voicePanel.setFocus(null);
-    voicePanel.setHeard(heard ?? '');
-  }
+  const narrator = new Narrator({ onSentence: (text) => caption.setSentence(text) });
+  director = new VoiceDirector({
+    controller,
+    mapper,
+    panel: voicePanel,
+    caption,
+    narrator,
+    labels,
+    parts: () => activeSegments,
+    highlighter: () => highlighter,
+    interior: () => interior,
+    zoomForDistance,
+    switchOrgan: (id) => {
+      const organ = ORGANS.find((o) => o.id === id);
+      if (!organ) return;
+      setActiveOrgan(organ.id);
+      void loadOrgan(organ);
+    },
+    activeOrganId: () => activeOrgan.id,
+  });
+  director.onSpecimenChanged();
 
   const vocabulary = (): Vocabulary => ({
-    segments: activeSegments.map((s) => ({ id: s.id, aliases: s.aliases })),
+    targets: activeSegments.map((s) => ({ id: s.id, label: s.label, aliases: s.aliases })),
     organs: ORGANS.map((o) => ({ id: o.id, label: o.label })),
   });
 
-  const applyVoice = (match: Match, heard: string): void => {
-    const { command } = match;
-    if (command.kind === 'segment') {
-      focusSegment(command.id, heard);
-    } else if (command.kind === 'reset') {
-      resetView(heard);
-    } else {
-      const organ = ORGANS.find((o) => o.id === command.id);
-      if (!organ) return;
-      if (organ.id === activeOrgan.id) {
-        resetView(heard);
-      } else {
-        setActiveOrgan(organ.id);
-        void loadOrgan(organ);
-      }
-    }
-  };
-
+  let greeted = false;
   const voice = new VoiceNavigator({
     vocabulary,
-    onCommand: applyVoice,
-    onHeard: (text) => voicePanel.setHeard(text),
-    onState: (state, detail) => voicePanel.setState(state, detail),
+    context: () => director!.context(),
+    isSpeaking: () => narrator.speaking,
+    onCommand: (match, heard) => director!.handle(match, heard),
+    onHeard: (text, final) => {
+      voicePanel.setHeard(text);
+      caption.setHeard(text, final);
+    },
+    onState: (state, detail) => {
+      voicePanel.setState(state, detail);
+      if (state === 'listening' && !greeted) {
+        greeted = true;
+        void narrator.say('Listening. Name any part of the heart, or say help.');
+      }
+    },
   });
+
+  /**
+   * Typed commands, chip phrases and the debug hook all run through the same
+   * matcher and director as speech, so the type-in box is a full alternative
+   * to the microphone, not a lesser one.
+   */
+  function runText(text: string): void {
+    const match = matchCommand(text, vocabulary(), director!.context());
+    if (match) {
+      director!.handle(match, text);
+      return;
+    }
+    caption.setKicker('NOT RECOGNISED');
+    caption.setHeard(text, true);
+    caption.setSentence('No part or command found in that. Say help for ideas.');
+    caption.setSentence(null);
+  }
 
   function voiceToggle(): void {
     if (voice.listening) voice.stop();
     else voice.start();
   }
+  // Keyboard: V toggles the microphone, / jumps to the type-in box. Ignored
+  // while typing, so the letters still reach the box.
+  window.addEventListener('keydown', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key === 'v' || event.key === 'V') voiceToggle();
+    if (event.key === '/') {
+      event.preventDefault();
+      voicePanel.expand();
+      document.getElementById('voice-typed')?.focus();
+    }
+  });
   const cameraFpsEl = document.getElementById('camera-fps')!;
   let overlayRenderer: HandOverlay | undefined;
   let latestHands: HandLandmarks[] = [];
@@ -418,17 +470,22 @@ async function boot(): Promise<void> {
       controller,
       loadOrgan,
       enableGestures,
-      focusSegment,
-      resetView,
-      // Run a transcript through the same path as a real utterance, so voice
-      // behaviour can be exercised without a microphone.
+      director,
+      narrator,
+      // Run a transcript through the same matcher and director as speech, so
+      // voice behaviour can be exercised without a microphone.
       say: (text: string) => {
-        const match = matchCommand(text, vocabulary());
-        if (match) applyVoice(match, text);
+        const match = matchCommand(text, vocabulary(), director!.context());
+        if (match) director!.handle(match, text);
         return match;
       },
+      // The recogniser's own path, interim/final handling and echo guard included.
+      hear: (text: string, final = true) => voice.inject(text, final),
       get highlighter() {
         return highlighter;
+      },
+      get interior() {
+        return interior;
       },
       pedal,
       blePedal,
@@ -437,6 +494,11 @@ async function boot(): Promise<void> {
         return handTrackingEnabled;
       },
       renderOnce: () => stage.renderer.render(stage.scene, stage.camera),
+      // Steps the simulation; only the last frame is drawn, so a long step
+      // never queues hundreds of frames of GPU work at once.
+      tick: (frames = 1, delta = 1 / 60) => {
+        for (let i = 0; i < frames; i++) tick(delta, i === frames - 1);
+      },
     },
   });
 
@@ -452,17 +514,32 @@ async function boot(): Promise<void> {
   const HEARTBEAT_FADE_PER_S = 4;
 
   const clock = new THREE.Clock();
-  const renderLoop = () => {
-    requestAnimationFrame(renderLoop);
-    const delta = clock.getDelta();
-    controller.update(delta);
-    highlighter?.update(delta, clock.elapsedTime);
-
+  // The heartbeat runs on its own clock so voice can slow or stop it without
+  // slowing anything else.
+  let beatTime = 0;
+  let elapsed = 0;
+  // One frame of everything. Split from the rAF loop so a backgrounded tab
+  // (where rAF is suspended) can still be stepped from the console.
+  function tick(delta: number, draw = true): void {
+    elapsed += delta;
     const handPresent = latestHands.length > 0;
+    if (director?.spinning && !handPresent) controller.rotateBy(delta * 0.45, 0);
+    controller.update(delta);
+    highlighter?.update(delta, elapsed);
+
+    const beatDelta = delta * (director?.beatRate ?? 1);
+    beatTime += beatDelta;
+    const phase = (beatTime % HEARTBEAT_CYCLE_S) / HEARTBEAT_CYCLE_S;
+    if (interior) {
+      interior.setReveal(highlighter?.xray ?? 0);
+      interior.update(beatDelta, phase, elapsed);
+    }
+    labels.update(delta, stage.camera, stage.pivot, highlighter?.xray ?? 0, director?.focusedId ?? null);
+
     const gainTarget = handPresent ? 0 : 1;
     heartbeatGain += (gainTarget - heartbeatGain) * Math.min(1, HEARTBEAT_FADE_PER_S * delta);
     stage.pivot.scale.setScalar(
-      1 + heartbeat(clock.elapsedTime) * HEARTBEAT_SCALE * heartbeatGain,
+      1 + heartbeat(beatTime) * HEARTBEAT_SCALE * heartbeatGain,
     );
 
     // Map smoothed zoom onto the camera dolly. Eased so the last stretch —
@@ -480,7 +557,7 @@ async function boot(): Promise<void> {
     const size = stage.renderer.getSize(new THREE.Vector2());
     stage.camera.aspect = size.x / size.y;
     stage.camera.updateProjectionMatrix();
-    stage.renderer.render(stage.scene, stage.camera);
+    if (draw) stage.renderer.render(stage.scene, stage.camera);
 
     overlayRenderer?.draw(latestHands, latestMode);
     hud.markRender();
@@ -491,6 +568,10 @@ async function boot(): Promise<void> {
       // Below ~24 fps the camera itself is the bottleneck, not the tracker.
       cameraFpsEl.classList.toggle('low', fps > 0 && fps < 24);
     }
+  }
+  const renderLoop = () => {
+    requestAnimationFrame(renderLoop);
+    tick(Math.min(clock.getDelta(), 0.1));
   };
   renderLoop();
 }

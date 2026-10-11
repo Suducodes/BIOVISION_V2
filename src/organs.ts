@@ -22,6 +22,8 @@ export interface OrganDef {
   fit?: number;
   /** Named regions voice navigation can fly to; absent means voice offers none. */
   segments?: SegmentDef[];
+  /** Schematic interior model (chambers and septa) shown in x-ray mode. */
+  interior?: string;
 }
 
 /**
@@ -39,6 +41,7 @@ export const ORGANS: OrganDef[] = [
     logTitle: 'CARDIAC SPECIMEN',
     source: 'High-fidelity textured cardiac model',
     segments: HEART_SEGMENTS,
+    interior: asset('models/heart_interior.glb'),
   },
   {
     id: 'lungs',

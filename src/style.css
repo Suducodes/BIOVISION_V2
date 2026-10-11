@@ -1123,6 +1123,285 @@ body {
   color: var(--text-dim);
 }
 
+/* Typed commands: the same vocabulary as speech, for a quiet room, a blocked
+   microphone or someone who cannot speak. */
+.voice-typed {
+  display: flex;
+  gap: 6px;
+}
+
+.voice-typed input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: rgba(3, 7, 16, 0.55);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.voice-typed input::placeholder {
+  color: var(--text-dim);
+}
+
+.voice-typed input:focus {
+  outline: none;
+  border-color: var(--cyan);
+}
+
+.voice-typed button {
+  width: 34px;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--cyan);
+  cursor: pointer;
+}
+
+.voice-modes {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+
+.voice-modes.hidden {
+  display: none;
+}
+
+.voice-modes button {
+  padding: 8px 0;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.voice-modes button:hover {
+  color: var(--text);
+}
+
+.voice-modes button.on {
+  color: var(--bg-0);
+  border-color: transparent;
+  background: linear-gradient(180deg, #5cf0b0, var(--teal));
+  box-shadow: 0 0 14px rgba(56, 224, 143, 0.45);
+  font-weight: 600;
+}
+
+.voice-group {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--cyan-dim);
+}
+
+/* --- Atlas name tags ------------------------------------------------------ */
+
+#atlas-labels {
+  position: absolute;
+  inset: 0;
+  /* Under every panel: a tag sliding behind the top bar is hidden, not drawn
+     over the organ switcher. */
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#atlas-labels.hidden {
+  display: none;
+}
+
+.atlas-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid var(--tag);
+  border-radius: 999px;
+  background: rgba(4, 9, 20, 0.8);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  will-change: transform;
+}
+
+.atlas-tag::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tag);
+}
+
+/* A short stem down to the exact point the tag names. */
+.atlas-tag::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 1px;
+  height: 8px;
+  background: var(--tag);
+}
+
+.atlas-tag.inside {
+  border-style: dashed;
+}
+
+.atlas-tag.focused {
+  background: var(--tag);
+  color: var(--bg-0);
+  font-weight: 700;
+}
+
+.atlas-tag.off {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* --- Caption card --------------------------------------------------------
+   Bottom-centre, sized to sit between the gesture legend and the tracker
+   panel at any width down to 1024px. */
+
+#caption {
+  position: absolute;
+  z-index: 7;
+  bottom: 30px;
+  left: 50%;
+  width: clamp(280px, calc(100vw - 720px), 600px);
+  padding: 12px 16px 14px;
+  border: 1px solid var(--edge-strong);
+  border-left: 3px solid var(--cyan);
+  border-radius: 12px;
+  background: var(--panel-solid);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  transform: translateX(-50%);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#caption.hidden {
+  opacity: 0;
+  transform: translate(-50%, 14px);
+  pointer-events: none;
+}
+
+.caption-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 12px;
+}
+
+.caption-orb {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.caption-kicker {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  color: var(--cyan);
+}
+
+.caption-progress {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.caption-progress i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(215, 236, 255, 0.16);
+}
+
+.caption-progress i.done { background: var(--cyan-dim); }
+.caption-progress i.now { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+.caption-progress i.right { background: var(--teal); box-shadow: none; }
+.caption-progress i.wrong { background: #ff6b6b; box-shadow: none; }
+
+.caption-text {
+  margin-top: 8px;
+  font-size: 15.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.caption-heard {
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.caption-heard:empty {
+  display: none;
+}
+
+.caption-heard.final {
+  color: var(--teal);
+}
+
+.caption-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.caption-chips:empty {
+  display: none;
+}
+
+.caption-chip {
+  padding: 6px 11px;
+  border: 1px solid var(--edge-strong);
+  border-radius: 999px;
+  background: rgba(27, 111, 181, 0.14);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.caption-chip:hover {
+  background: rgba(27, 111, 181, 0.32);
+}
+
 #focus-label {
   position: absolute;
   z-index: 6;

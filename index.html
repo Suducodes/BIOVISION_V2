@@ -119,17 +119,46 @@
         </button>
         <div class="voice-body">
           <button id="voice-toggle" class="voice-toggle" type="button">START LISTENING</button>
-          <p id="voice-heard" class="voice-heard">Say a segment name, or tap one below.</p>
+          <p id="voice-heard" class="voice-heard"></p>
+          <form id="voice-typed-form" class="voice-typed" autocomplete="off">
+            <input id="voice-typed" type="text" placeholder="…or type a command, e.g. mitral valve" aria-label="Type a voice command" />
+            <button type="submit" aria-label="Run command">↵</button>
+          </form>
+          <div id="voice-modes" class="voice-modes" role="group" aria-label="View modes">
+            <button type="button" data-mode="xray" title="See-through shell — say “x-ray”">X-RAY</button>
+            <button type="button" data-mode="atlas" title="Colour and name every part — say “labels”">LABELS</button>
+            <button type="button" data-mode="flow" title="Blood moving through the heart — say “blood flow”">FLOW</button>
+            <button type="button" data-mode="tour" title="Follow one drop of blood — say “follow the blood”">TOUR</button>
+            <button type="button" data-mode="quiz" title="Name the glowing part — say “quiz me”">QUIZ</button>
+          </div>
           <div id="voice-chips" class="voice-chips"></div>
           <p id="voice-note" class="voice-note">
-            Uses your browser's speech service, which needs an internet
-            connection. Gesture and tap control stay fully offline.
+            Speech recognition uses your browser's speech service, which needs
+            an internet connection; spoken replies use on-device voices where
+            available. Typing, tapping and gestures stay fully offline. The
+            inside of the heart is a schematic built to fit this model, not
+            traced from a scan.
           </p>
         </div>
       </section>
       </div>
 
-      <!-- Names the segment currently in focus, with what was heard. -->
+      <!-- Atlas name tags, pinned to parts of the specimen. -->
+      <div id="atlas-labels" class="hidden" aria-label="Part labels"></div>
+
+      <!-- What the app is saying, what it heard, and any answers to tap. -->
+      <section id="caption" class="hidden" aria-live="polite">
+        <div class="caption-top">
+          <span class="caption-orb" aria-hidden="true"></span>
+          <span id="caption-kicker" class="caption-kicker"></span>
+          <span id="caption-progress" class="caption-progress"></span>
+        </div>
+        <p id="caption-text" class="caption-text"></p>
+        <p id="caption-heard" class="caption-heard"></p>
+        <div id="caption-chips" class="caption-chips"></div>
+      </section>
+
+      <!-- Names the part currently in focus, with what was heard. -->
       <div id="focus-label" class="hidden" aria-live="polite">
         <span class="focus-kicker">FOCUS</span>
         <b id="focus-name"></b>

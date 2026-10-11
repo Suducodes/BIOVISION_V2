@@ -1,9 +1,14 @@
 import type { VoiceState } from '../voice/voiceNavigator';
 
+export type ModeId = 'xray' | 'atlas' | 'flow' | 'tour' | 'quiz';
+
 export interface VoicePanelHandlers {
   onToggleListening(): void;
-  /** A segment chip was tapped, or the reset chip (`'reset'`). */
+  /** A part chip was tapped, or the reset chip (`'reset'`). */
   onChip(id: string): void;
+  onMode(mode: ModeId): void;
+  /** A command was typed instead of spoken. */
+  onTyped(text: string): void;
 }
 
 const STATE_TEXT: Record<VoiceState, string> = {
@@ -13,14 +18,21 @@ const STATE_TEXT: Record<VoiceState, string> = {
   error: 'ERROR',
 };
 
-const IDLE_PROMPT = 'Say a segment name, or tap one below.';
+const GROUPS: Array<{ id: string; title: string }> = [
+  { id: 'chamber', title: 'CHAMBERS & SURFACE' },
+  { id: 'vessel', title: 'GREAT VESSELS' },
+  { id: 'inside', title: 'INSIDE · SCHEMATIC' },
+];
+
+const IDLE_PROMPT = 'Say a part, or try “x-ray”, “follow the blood”, “quiz me”.';
 
 /**
  * The voice panel and the focus label.
  *
- * It only draws state: it never decides what a command means. The chips double
- * as the fallback — everything that can be said can also be tapped — so a noisy
- * room, a blocked microphone or an offline machine costs the presenter nothing.
+ * It only draws state: it never decides what a command means. The chips and
+ * the type-in box double as the fallback — everything that can be said can
+ * also be tapped or typed — so a noisy room, a blocked microphone, an offline
+ * machine or a user who cannot speak costs nothing.
  */
 export class VoicePanel {
   private readonly panel = el('voice');
@@ -28,8 +40,10 @@ export class VoicePanel {
   private readonly toggle = el('voice-toggle') as HTMLButtonElement;
   private readonly stateText = el('voice-state');
   private readonly heard = el('voice-heard');
+  private readonly modes = el('voice-modes');
   private readonly chips = el('voice-chips');
   private readonly note = el('voice-note');
+  private readonly typed = el('voice-typed') as HTMLInputElement;
 
   private readonly focusLabel = el('focus-label');
   private readonly focusName = el('focus-name');
@@ -44,30 +58,47 @@ export class VoicePanel {
       this.head.setAttribute('aria-expanded', String(!collapsed));
     });
     this.toggle.addEventListener('click', () => this.handlers.onToggleListening());
+    for (const button of this.modes.querySelectorAll<HTMLButtonElement>('[data-mode]')) {
+      button.addEventListener('click', () => this.handlers.onMode(button.dataset.mode as ModeId));
+    }
+    el('voice-typed-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const text = this.typed.value.trim();
+      if (!text) return;
+      this.handlers.onTyped(text);
+      this.typed.value = '';
+    });
 
     if (!supported) {
       this.toggle.disabled = true;
-      this.toggle.textContent = 'VOICE UNAVAILABLE';
+      this.toggle.textContent = 'MIC UNAVAILABLE';
       this.note.textContent =
-        'This browser has no speech recognition. Open the app in Chrome or Edge, or tap a segment below instead.';
+        'This browser has no speech recognition. Open the app in Chrome or Edge — or type a command above, or tap a part.';
     }
     this.setState('off');
     this.setHeard('');
   }
 
   /** Rebuilds the chips for whichever specimen is loaded. */
-  setSegments(segments: Array<{ id: string; label: string }>): void {
+  setSegments(segments: Array<{ id: string; label: string; group: string }>): void {
     this.chips.replaceChildren();
+    this.modes.classList.toggle('hidden', segments.length === 0);
     if (segments.length === 0) {
       const none = document.createElement('p');
       none.className = 'voice-note';
-      none.style.gridColumn = '1 / -1';
-      none.textContent = 'This specimen has no named segments yet. You can still say "show heart", "show lungs" or "show coronary".';
+      none.textContent =
+        'This specimen has no named parts yet. You can still say “show heart”, “show lungs” or “show coronary”, or “turn around”.';
       this.chips.append(none);
       return;
     }
-    for (const segment of segments) {
-      this.chips.append(this.chip(segment.id, segment.label));
+    for (const group of GROUPS) {
+      const members = segments.filter((s) => s.group === group.id);
+      if (members.length === 0) continue;
+      const title = document.createElement('h3');
+      title.className = 'voice-group';
+      title.textContent = group.title;
+      this.chips.append(title);
+      for (const segment of members) this.chips.append(this.chip(segment.id, segment.label));
     }
     const reset = this.chip('reset', 'RESET VIEW');
     reset.classList.add('wide');
@@ -78,6 +109,14 @@ export class VoicePanel {
   setActive(id: string | null): void {
     for (const chip of this.chips.querySelectorAll<HTMLElement>('.voice-chip')) {
       chip.classList.toggle('active', chip.dataset.id === id);
+    }
+  }
+
+  /** Lights the mode buttons that are on. */
+  setModes(on: Partial<Record<ModeId, boolean>>): void {
+    for (const button of this.modes.querySelectorAll<HTMLElement>('[data-mode]')) {
+      const value = on[button.dataset.mode as ModeId];
+      if (value !== undefined) button.classList.toggle('on', value);
     }
   }
 
@@ -96,7 +135,7 @@ export class VoicePanel {
     this.heard.classList.toggle('idle', !text);
   }
 
-  /** Shows which segment is in focus and what was said to get there. */
+  /** Shows which part is in focus and what was said to get there. */
   setFocus(label: string | null, heard?: string): void {
     if (label === null) {
       this.focusLabel.classList.add('hidden');
