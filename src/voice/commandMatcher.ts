@@ -326,11 +326,67 @@ const FILLER = new Set(
 /** Words that only narrow an existing choice; never enough to name a part. */
 const NARROWING = new Set(['left', 'right', 'main', 'common', 'artery', 'arteries', 'vein']);
 
-export function matchCommand(transcript: string, vocab: Vocabulary, context: MatchContext = {}): Match | null {
+/**
+ * The words of a transcript as the matcher sees them: lower-cased, common
+ * mishearings repaired ("erotic" -> "aortic") and split words joined back
+ * ("try cuspid" -> "tricuspid").
+ */
+export function normaliseWords(transcript: string, vocab: Vocabulary): string[] {
   const words = new Set<string>();
   for (const [phrase] of INTENT_PHRASES) for (const w of tokenise(phrase)) words.add(w);
   for (const t of vocab.targets) for (const alias of t.aliases) for (const w of tokenise(alias)) words.add(w);
-  const tokens = joinSplitWords(tokenise(repairHearing(transcript)), words);
+  return joinSplitWords(tokenise(repairHearing(transcript)), words);
+}
+
+export interface Continuation {
+  /** Part id, or `intent:<name>` for a command. */
+  id: string;
+  /** What to show: the part's name, or the command phrase. */
+  label: string;
+  /** The word(s) still to come, e.g. "ventricle" after "left". */
+  rest: string;
+}
+
+/**
+ * Names the transcript has only begun: after "left", the left ventricle, left
+ * atrium, left side, ... A non-empty answer means the speaker is probably
+ * mid-name, so the navigator waits for the next word instead of acting on, or
+ * asking about, the first one. Matches the last one to three words against the
+ * start of every longer name.
+ */
+export function continuations(transcript: string, vocab: Vocabulary): Continuation[] {
+  const tokens = normaliseWords(transcript, vocab);
+  const found = new Map<string, Continuation & { n: number }>();
+  const names: Array<{ id: string; label: string; alias: string }> = [];
+  for (const t of vocab.targets) for (const alias of t.aliases) names.push({ id: t.id, label: t.label, alias });
+  for (const [phrase, intent] of INTENT_PHRASES) names.push({ id: `intent:${intent}`, label: phrase, alias: phrase });
+  for (let n = Math.min(3, tokens.length); n >= 1; n--) {
+    const tail = tokens.slice(tokens.length - n);
+    if (tail.every((w) => FILLER.has(w))) continue;
+    for (const { id, label, alias } of names) {
+      const a = tokenise(alias);
+      if (a.length <= n) continue;
+      let ok = true;
+      for (let k = 0; k < n; k++) {
+        if (!wordsMatch(tail[k]!, a[k]!)) {
+          ok = false;
+          break;
+        }
+      }
+      const prev = found.get(id);
+      if (ok && (!prev || prev.n < n)) found.set(id, { id, label, rest: a.slice(n).join(' '), n });
+    }
+  }
+  return [...found.values()].sort((x, y) => y.n - x.n).map(({ id, label, rest }) => ({ id, label, rest }));
+}
+
+/** Whether a heard word is close enough to a vocabulary word (same rules as matching). */
+export function similarWords(heard: string, wanted: string): boolean {
+  return wordsMatch(heard, wanted);
+}
+
+export function matchCommand(transcript: string, vocab: Vocabulary, context: MatchContext = {}): Match | null {
+  const tokens = normaliseWords(transcript, vocab);
   if (tokens.length === 0) return null;
 
   type Found = { command: VoiceCommand; phrase: string; start: number; end: number; length: number; inexact: number };

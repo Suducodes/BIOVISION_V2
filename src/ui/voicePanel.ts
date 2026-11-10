@@ -11,7 +11,15 @@ export interface VoicePanelHandlers {
   onTyped(text: string): void;
   /** The recogniser's language (accent) was changed. */
   onLanguage(lang: string): void;
+  /** Always listening or push-to-talk. */
+  onMicMode(mode: 'open' | 'ptt'): void;
+  /** The foot pedal should open the microphone instead of gesture control. */
+  onPedalTalk(on: boolean): void;
+  onDownloadLog(): void;
 }
+
+const MIC_MODE_KEY = 'biovision.voiceMicMode';
+const PEDAL_TALK_KEY = 'biovision.voicePedalTalk';
 
 const LANG_KEY = 'biovision.voiceLang';
 
@@ -80,6 +88,16 @@ export class VoicePanel {
       }
       this.handlers.onLanguage(lang.value);
     });
+    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-mic]')) {
+      b.addEventListener('click', () => this.setMicMode(b.dataset.mic as 'open' | 'ptt', true));
+    }
+    const pedal = el('voice-pedal-talk') as HTMLInputElement;
+    pedal.checked = read(PEDAL_TALK_KEY) === '1';
+    pedal.addEventListener('change', () => {
+      write(PEDAL_TALK_KEY, pedal.checked ? '1' : '0');
+      this.handlers.onPedalTalk(pedal.checked);
+    });
+    el('voice-log').addEventListener('click', () => this.handlers.onDownloadLog());
     el('voice-typed-form').addEventListener('submit', (event) => {
       event.preventDefault();
       const text = this.typed.value.trim();
@@ -96,6 +114,22 @@ export class VoicePanel {
     }
     this.setState('off');
     this.setHeard('');
+  }
+
+  /** The microphone mode remembered from last time (default: always listening). */
+  get micMode(): 'open' | 'ptt' {
+    return read(MIC_MODE_KEY) === 'ptt' ? 'ptt' : 'open';
+  }
+
+  get pedalTalk(): boolean {
+    return (el('voice-pedal-talk') as HTMLInputElement).checked;
+  }
+
+  /** Lights the chosen microphone mode; `notify` passes the change on. */
+  setMicMode(mode: 'open' | 'ptt', notify = false): void {
+    for (const b of document.querySelectorAll<HTMLElement>('[data-mic]')) b.classList.toggle('on', b.dataset.mic === mode);
+    write(MIC_MODE_KEY, mode);
+    if (notify) this.handlers.onMicMode(mode);
   }
 
   /** The language chosen in the panel (remembered between visits). */
@@ -190,4 +224,20 @@ function el(id: string): HTMLElement {
   const node = document.getElementById(id);
   if (!node) throw new Error(`voice panel element #${id} missing`);
   return node;
+}
+
+function read(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function write(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Not remembered between visits, but still applied.
+  }
 }

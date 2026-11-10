@@ -1615,3 +1615,210 @@ body {
      fixed width needs to shrink to keep the top bar from feeling cramped. */
   #hud { width: 210px; }
 }
+
+/* --- Live voice display ---------------------------------------------------
+   Bottom centre while voice is on: big, clear words as you say them, a mic orb
+   that pulses with your voice, and what the app made of it. Readable from
+   across a room; the caption card moves up above it. */
+
+#voice-hud {
+  position: absolute;
+  z-index: 8;
+  bottom: 26px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: clamp(300px, calc(100vw - 700px), 680px);
+  min-height: 84px;
+  padding: 12px 18px 12px 12px;
+  border: 1px solid var(--edge-strong);
+  border-radius: 46px;
+  background: var(--panel-solid);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  transform: translateX(-50%);
+  transition: opacity 0.25s ease, transform 0.25s ease, border-color 0.2s ease;
+  --phase: var(--cyan);
+}
+
+#voice-hud.hidden {
+  opacity: 0;
+  transform: translate(-50%, 14px);
+  pointer-events: none;
+}
+
+#voice-hud[data-phase='hearing'],
+#voice-hud[data-phase='ready'] { --phase: var(--cyan); border-color: var(--cyan); }
+#voice-hud[data-phase='waiting'] { --phase: var(--amber); border-color: var(--amber); }
+#voice-hud[data-phase='acting'] { --phase: var(--teal); border-color: var(--teal); }
+#voice-hud[data-phase='nomatch'] { --phase: #ff6b6b; border-color: rgba(255, 107, 107, 0.7); }
+#voice-hud[data-phase='closed'] { --phase: var(--text-dim); }
+
+.vh-orb {
+  --level: 0;
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 2px solid var(--phase);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(52, 227, 255, 0.18), rgba(3, 7, 16, 0.9) 70%);
+  color: var(--phase);
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+#voice-hud[data-mode='ptt'] .vh-orb { cursor: pointer; }
+#voice-hud[data-mode='ptt'][data-phase='closed'] .vh-orb { opacity: 0.75; }
+#voice-hud[data-mode='ptt'] .vh-orb:active { transform: scale(0.95); }
+
+.vh-orb svg {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+}
+
+/* The ring grows with your voice: you can see it hears you before any word. */
+.vh-ring {
+  position: absolute;
+  inset: -4px;
+  border: 3px solid var(--phase);
+  border-radius: 50%;
+  opacity: calc(0.15 + var(--level) * 0.85);
+  transform: scale(calc(1 + var(--level) * 0.38));
+  transition: transform 60ms linear, opacity 60ms linear;
+  box-shadow: 0 0 calc(4px + var(--level) * 22px) var(--phase);
+}
+
+#voice-hud[data-phase='closed'] .vh-ring { opacity: 0.12; transform: none; box-shadow: none; }
+
+.vh-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#vh-status {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--phase);
+}
+
+.vh-words {
+  min-height: 30px;
+  font-size: 23px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+#vh-settled span { color: #ffffff; }
+.vh-tentative span { color: var(--text-dim); font-weight: 500; }
+.vh-words span.hit { color: var(--teal); }
+.vh-words span.dangling { color: var(--amber); }
+
+.vh-caret {
+  display: inline-block;
+  width: 3px;
+  height: 22px;
+  margin-left: 2px;
+  vertical-align: -3px;
+  border-radius: 2px;
+  background: var(--phase);
+  opacity: 0;
+}
+
+#voice-hud[data-phase='hearing'] .vh-caret,
+#voice-hud[data-phase='ready'] .vh-caret,
+#voice-hud[data-phase='waiting'] .vh-caret {
+  opacity: 1;
+  animation: vh-blink 0.9s steps(2, start) infinite;
+}
+
+@keyframes vh-blink { to { visibility: hidden; } }
+
+#vh-next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#vh-next:empty { display: none; }
+
+.vh-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 206, 106, 0.55);
+  border-radius: 999px;
+  background: rgba(255, 206, 106, 0.08);
+  color: var(--text-dim);
+  font-family: var(--sans);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.vh-chip b { color: var(--amber); font-size: 14px; }
+.vh-chip:hover { background: rgba(255, 206, 106, 0.18); }
+
+#vh-result {
+  flex: none;
+  max-width: 40%;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--teal);
+  text-align: right;
+}
+
+#vh-result:empty { display: none; }
+
+#app.voice-live #caption { bottom: calc(40px + var(--voice-hud-h, 84px)); transition: bottom 0.2s ease, opacity 0.3s ease, transform 0.3s ease; }
+
+/* Voice panel: how the microphone listens, pedal-as-talk, and the log. */
+.voice-mic-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.voice-mic-mode button,
+.voice-log {
+  padding: 7px 6px;
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.voice-mic-mode button.on {
+  border-color: var(--cyan);
+  background: rgba(52, 227, 255, 0.12);
+  color: var(--cyan);
+}
+
+.voice-log:hover,
+.voice-mic-mode button:hover { color: var(--text); }
+
+.voice-pedal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+}

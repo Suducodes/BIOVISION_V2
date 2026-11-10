@@ -70,6 +70,9 @@ export class VoiceDirector {
     const { command } = match;
     this.deps.caption.setHeard(heard, true);
     this.deps.panel.setHeard(heard);
+    // A new command cuts off whatever the app is saying: never make the user
+    // wait for narration to finish. (Tour and quiz keep their own pacing.)
+    if (this.mode === 'free') this.deps.narrator.cancel();
 
     if (command.kind === 'organ') {
       this.endModes();
@@ -155,7 +158,9 @@ export class VoiceDirector {
     this.deps.caption.setChips([]);
 
     if (options.speak === 'full') void this.say(part.blurb);
-    else if (options.speak === 'short') void this.say(firstSentence(part.blurb));
+    // Short: only the name is spoken, so the next command is never kept waiting;
+    // the first sentence of the description is shown as the caption.
+    else if (options.speak === 'short') void this.say(`${part.label}.`, firstSentence(part.blurb));
   }
 
   reset(heard?: string): void {
@@ -515,9 +520,9 @@ export class VoiceDirector {
 
   // --- Speech --------------------------------------------------------------
 
-  private say(text: string): Promise<void> {
-    this.lastSpoken = text;
-    return this.deps.narrator.say(text);
+  private say(text: string, caption?: string): Promise<void> {
+    this.lastSpoken = caption ?? text;
+    return this.deps.narrator.say(text, caption);
   }
 
   private part(id: string): SegmentDef | undefined {

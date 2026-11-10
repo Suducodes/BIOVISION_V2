@@ -28,6 +28,8 @@ import { matchCommand, type Vocabulary } from './voice/commandMatcher';
 import { Narrator } from './voice/narrator';
 import { VoiceDirector } from './voice/voiceDirector';
 import { VoicePanel } from './ui/voicePanel';
+import { VoiceHud } from './ui/voiceHud';
+import { MicMeter } from './voice/micMeter';
 import { CaptionCard } from './ui/captionCard';
 import { AtlasLabels } from './ui/atlasLabels';
 import type { SegmentDef } from './segments';
@@ -69,6 +71,21 @@ async function boot(): Promise<void> {
       onMode: (mode) => director?.toggleMode(mode),
       onTyped: (text) => runText(text),
       onLanguage: (lang) => voice.setLanguage(lang),
+      onMicMode: (mode) => {
+        voice.setMode(mode);
+        voiceHud.setMode(mode);
+      },
+      onPedalTalk: (on) => {
+        pedalTalk = on;
+      },
+      onDownloadLog: () => {
+        const url = URL.createObjectURL(new Blob([voice.logJson()], { type: 'application/json' }));
+        const a = Object.assign(document.createElement('a'), { href: url, download: `voice_log_${new Date().toISOString().replace(/[:.]/g, '-')}.json` });
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      },
     },
     VoiceNavigator.isSupported(),
   );
@@ -252,26 +269,80 @@ async function boot(): Promise<void> {
     organs: ORGANS.map((o) => ({ id: o.id, label: o.label })),
   });
 
+  // The live voice display and the microphone's loudness meter.
+  const micMeter = new MicMeter();
+  let micOn = false;
+  let pedalTalk = voicePanel.pedalTalk;
+  const voiceHud = new VoiceHud({
+    onPick: (id, label) => (id.startsWith('intent:') ? runText(label) : director!.pick(id)),
+    onPress: () => {
+      narrator.cancel();
+      voice.press();
+    },
+    onRelease: () => voice.release(),
+  });
+
+  /** What to show as the result of a command: the part's name, not the alias heard. */
+  const commandLabel = (match: Parameters<VoiceDirector['handle']>[0]): string => {
+    const c = match.command;
+    if (c.kind === 'target') return activeSegments.find((p) => p.id === c.id)?.label ?? match.phrase;
+    if (c.kind === 'organ') return `Show ${ORGANS.find((o) => o.id === c.id)?.label.toLowerCase() ?? c.id}`;
+    if (c.kind === 'clarify') return 'Which one?';
+    return match.phrase.charAt(0).toUpperCase() + match.phrase.slice(1);
+  };
+
   let greeted = false;
   const voice = new VoiceNavigator({
     vocabulary,
     context: () => director!.context(),
-    isSpeaking: () => narrator.speaking,
-    onCommand: (match, heard) => director!.handle(match, heard),
+    isEcho: (text) => narrator.isEcho(text),
+    onCommand: (match, heard) => {
+      director!.handle(match, heard);
+      voiceHud.update({ phase: 'acting', settled: heard, tentative: '', matched: match.phrase });
+      voiceHud.confirm(commandLabel(match));
+    },
     onHeard: (text, final) => {
       voicePanel.setHeard(text);
       caption.setHeard(text, final);
     },
+    onLive: (live) => voiceHud.update(live),
     onState: (state, detail) => {
       voicePanel.setState(state, detail);
+      const on = state === 'listening' || state === 'starting';
+      voiceHud.setActive(on);
+      if (on && !micOn) {
+        micOn = true;
+        void micMeter.start();
+      } else if (!on && micOn) {
+        micOn = false;
+        micMeter.stop();
+      }
       if (state === 'listening' && !greeted) {
         greeted = true;
-        void narrator.say('Listening. Name any part of the heart, or say help.');
+        void narrator.say(voice.voiceMode === 'ptt' ? 'Ready. Hold space and speak.' : 'Listening. Name any part of the heart.');
       }
     },
   });
 
   voice.setLanguage(voicePanel.language);
+  voice.setMode(voicePanel.micMode);
+  voiceHud.setMode(voicePanel.micMode);
+  voicePanel.setMicMode(voicePanel.micMode);
+
+  // Push-to-talk on the keyboard: hold Space (not while typing in a field).
+  const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== 'Space' || voice.voiceMode !== 'ptt' || typing(event.target)) return;
+    event.preventDefault();
+    if (event.repeat || voice.pressed) return;
+    narrator.cancel();
+    voice.press();
+  });
+  window.addEventListener('keyup', (event) => {
+    if (event.code !== 'Space' || voice.voiceMode !== 'ptt') return;
+    event.preventDefault();
+    voice.release();
+  });
 
   /**
    * Typed commands, chip phrases and the debug hook all run through the same
@@ -390,12 +461,32 @@ async function boot(): Promise<void> {
     pedalIndicator.className = `pedal-indicator ${state}`;
   };
 
+  // "Foot pedal = talk": the pedal opens the microphone (push-to-talk) instead of
+  // gating gesture control, so the hands stay free and nothing moves while talking.
+  const pedalPress = (pressed: boolean) => {
+    if (!pedalTalk) {
+      setHandTracking(pressed);
+      return;
+    }
+    if (pressed) {
+      if (voice.voiceMode !== 'ptt') {
+        voice.setMode('ptt');
+        voiceHud.setMode('ptt');
+        voicePanel.setMicMode('ptt');
+      }
+      narrator.cancel();
+      voice.press();
+    } else {
+      voice.release();
+    }
+  };
+
   const pedal = new PedalController({
-    onPressChange: setHandTracking,
+    onPressChange: (pressed: boolean) => pedalPress(pressed),
     onConnectionChange: (connected) => renderPedalState(connected ? 'live' : 'connecting', 'wifi'),
   });
   const blePedal = new BlePedalController({
-    onPressChange: setHandTracking,
+    onPressChange: (pressed: boolean) => pedalPress(pressed),
     onConnectionChange: (connected) => renderPedalState(connected ? 'live' : 'connecting', 'ble'),
   });
 
@@ -484,6 +575,7 @@ async function boot(): Promise<void> {
       },
       // The recogniser's own path, interim/final handling and echo guard included.
       hear: (text: string, final = true) => voice.inject(text, final),
+      voice,
       get highlighter() {
         return highlighter;
       },
@@ -564,6 +656,7 @@ async function boot(): Promise<void> {
 
     overlayRenderer?.draw(latestHands, latestMode);
     hud.markRender();
+    if (micOn) voiceHud.setLevel(micMeter.level());
 
     if (tracker) {
       const fps = tracker.cameraFps();

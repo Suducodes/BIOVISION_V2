@@ -15,6 +15,9 @@ export interface NarratorHandlers {
 // After speech ends the room still echoes it for a moment; the microphone
 // should ignore that tail.
 const ECHO_TAIL_MS = 450;
+// How long something said stays in the echo memory. The recogniser can deliver
+// the app's own words a second or two after they were spoken.
+const ECHO_MEMORY_MS = 3000;
 
 export class Narrator {
   private voice: SpeechSynthesisVoice | null = null;
@@ -24,6 +27,8 @@ export class Narrator {
   private quietUntil = 0;
   private generation = 0;
   private finished: (() => void) | null = null;
+  /** Words recently spoken (and about to be), for telling the app's own voice from the user's. */
+  private spoken: Array<{ words: Set<string>; until: number }> = [];
 
   static isSupported(): boolean {
     return 'speechSynthesis' in window;
@@ -56,6 +61,24 @@ export class Narrator {
     return this.muted;
   }
 
+  /**
+   * True when `heard` is most likely the microphone picking up the app's own
+   * narration: nearly all of its words were in something said in the last few
+   * seconds. Anything else is the user, and may interrupt.
+   */
+  isEcho(heard: string): boolean {
+    if (this.muted) return false;
+    const now = performance.now();
+    this.spoken = this.spoken.filter((s) => s.until > now || (this.active && s.until === Infinity));
+    if (this.spoken.length === 0) return false;
+    const words = heard.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2);
+    if (words.length === 0) return false;
+    const said = new Set<string>();
+    for (const s of this.spoken) for (const w of s.words) said.add(w);
+    const inNarration = words.filter((w) => said.has(w)).length;
+    return inNarration / words.length >= 0.75;
+  }
+
   setMuted(muted: boolean): void {
     this.muted = muted;
     if (muted) this.cancel();
@@ -66,10 +89,19 @@ export class Narrator {
    * settles when it has all been spoken, or when it is interrupted — so a tour
    * can simply await each stop. Captions are shown even when muted.
    */
-  say(text: string): Promise<void> {
+  say(text: string, caption?: string): Promise<void> {
     this.cancel();
     const generation = ++this.generation;
     this.queue = text.match(/[^.!?]+[.!?]*/g)?.map((s) => s.trim()).filter(Boolean) ?? [];
+    // Remember every word about to be said, until a few seconds after it ends.
+    this.spoken.push({
+      words: new Set(text.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter((w) => w.length > 2)),
+      until: Infinity,
+    });
+    // A separate caption (e.g. a fuller sentence than the one spoken) is shown
+    // for the whole utterance instead of the spoken sentences.
+    this.caption = caption ?? null;
+    if (this.caption) this.handlers.onSentence(this.caption);
     return new Promise((resolve) => {
       this.finished = resolve;
       this.next(generation);
@@ -80,6 +112,7 @@ export class Narrator {
   cancel(): void {
     this.generation++;
     this.queue = [];
+    this.expireSpoken();
     if (Narrator.isSupported()) speechSynthesis.cancel();
     if (this.active) this.quietUntil = performance.now() + ECHO_TAIL_MS;
     this.active = false;
@@ -88,12 +121,21 @@ export class Narrator {
     done?.();
   }
 
+  private caption: string | null = null;
+
+  /** Words of finished or cancelled speech fade from the echo memory after a few seconds. */
+  private expireSpoken(): void {
+    const until = performance.now() + ECHO_MEMORY_MS;
+    for (const s of this.spoken) if (s.until === Infinity) s.until = until;
+  }
+
   private next(generation: number): void {
     if (generation !== this.generation) return;
     const sentence = this.queue.shift();
     if (sentence === undefined) {
       this.active = false;
       this.quietUntil = performance.now() + ECHO_TAIL_MS;
+      this.expireSpoken();
       this.handlers.onSentence(null);
       const done = this.finished;
       this.finished = null;
@@ -101,7 +143,7 @@ export class Narrator {
       return;
     }
     this.active = true;
-    this.handlers.onSentence(sentence);
+    if (!this.caption) this.handlers.onSentence(sentence);
 
     if (this.muted || !Narrator.isSupported()) {
       // Silent: hold each caption about as long as it would take to say.

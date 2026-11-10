@@ -119,6 +119,14 @@
         </button>
         <div class="voice-body">
           <button id="voice-toggle" class="voice-toggle" type="button">START LISTENING</button>
+          <div class="voice-mic-mode" role="radiogroup" aria-label="How the microphone listens">
+            <button type="button" data-mic="open" title="Every word counts while voice is on">ALWAYS LISTENING</button>
+            <button type="button" data-mic="ptt" title="Words count only while you hold Space, the mic button or the pedal">PUSH-TO-TALK</button>
+          </div>
+          <label class="voice-pedal" title="The foot pedal opens the microphone instead of gesture control">
+            <input id="voice-pedal-talk" type="checkbox" />
+            <span>Foot pedal = talk (hold to speak)</span>
+          </label>
           <label class="voice-lang" title="Which English the recogniser expects. Try another if words are misheard.">
             <span>ACCENT</span>
             <select id="voice-lang">
@@ -140,6 +148,7 @@
             <button type="button" data-mode="quiz" title="Name the glowing part — say “quiz me”">QUIZ</button>
           </div>
           <div id="voice-chips" class="voice-chips"></div>
+          <button id="voice-log" class="voice-log" type="button" title="Download what the recogniser heard and what the app decided, with timings">DOWNLOAD VOICE LOG</button>
           <p id="voice-note" class="voice-note">
             Speech recognition uses your browser's speech service, which needs
             an internet connection; spoken replies use on-device voices where
@@ -155,6 +164,20 @@
       <div id="atlas-labels" class="hidden" aria-label="Part labels"></div>
 
       <!-- What the app is saying, what it heard, and any answers to tap. -->
+      <!-- Live voice: is it hearing me, what did it hear, what will it do. -->
+      <section id="voice-hud" class="hidden" data-phase="idle" data-mode="open" aria-live="polite">
+        <button id="vh-orb" class="vh-orb" type="button" aria-label="Hold to talk">
+          <span class="vh-ring"></span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+        </button>
+        <div class="vh-body">
+          <div id="vh-status" class="vh-status"></div>
+          <div class="vh-words"><span id="vh-settled"></span><span id="vh-tentative" class="vh-tentative"></span><i class="vh-caret"></i></div>
+          <div id="vh-next" class="vh-next"></div>
+        </div>
+        <div id="vh-result" class="vh-result"></div>
+      </section>
+
       <section id="caption" class="hidden" aria-live="polite">
         <div class="caption-top">
           <span class="caption-orb" aria-hidden="true"></span>
